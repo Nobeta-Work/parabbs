@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import VditorEditor from '@/components/editor/VditorEditor.vue'
+import ManagedImageField from '@/components/ManagedImageField.vue'
 import {
   NButton,
   NEmpty,
@@ -72,6 +73,7 @@ const {
 const blogId = computed(() => String(route.params.id || ''))
 const loading = ref(false)
 const saving = ref(false)
+const coverUploading = ref(false)
 const dirty = ref(false)
 const autosaveEnabled = ref(false)
 const autosavePending = ref(false)
@@ -91,6 +93,7 @@ const AUTOSAVE_DELAY = 60_000
 const form = reactive({
   title: '',
   summary: '',
+  coverUrl: null as string | null,
   content: '',
   folderId: String(ROOT_FOLDER_ID),
   isPublished: 0 as PublishStatus,
@@ -131,6 +134,7 @@ function setFormFromBlog(blog: BlogPrivateDetailVO): void {
   contentInitialized = false
   form.title = blog.title
   form.summary = blog.summary || ''
+  form.coverUrl = blog.coverUrl ?? null
   form.content = blog.content || ''
   form.folderId = String(blog.folderId ?? ROOT_FOLDER_ID)
   form.isPublished = blog.isPublished
@@ -200,6 +204,7 @@ function getSaveSnapshot(content = form.content): string {
   return JSON.stringify({
     title: form.title.trim(),
     summary: form.summary,
+    coverUrl: form.coverUrl,
     content,
     folderId: form.folderId,
     isPublished: form.isPublished,
@@ -212,7 +217,7 @@ async function runAutosave(): Promise<void> {
     return
   }
 
-  if (saving.value) {
+  if (saving.value || coverUploading.value) {
     scheduleAutosave()
     return
   }
@@ -328,18 +333,20 @@ async function handleSave(options: { silent?: boolean } = {}): Promise<boolean> 
     return false
   }
 
-  if (saving.value) {
+  if (saving.value || coverUploading.value) {
     return false
   }
 
   saving.value = true
   const content = form.content
+  const coverUrl = form.coverUrl
   const snapshot = getSaveSnapshot(content)
   try {
     const tagIds = await resolveTagIds()
     await updatePrivateBlog(blogId.value, {
       title: form.title.trim(),
       summary: form.summary,
+      coverUrl,
       content,
       folderId: form.folderId,
       isPublished: form.isPublished,
@@ -447,7 +454,7 @@ onUnmounted(() => {
               <n-switch v-model:value="autosaveEnabled" size="small" :disabled="saving" />
               <span class="autosave-state">{{ autosaveStateText }}</span>
             </div>
-            <n-button type="primary" :loading="saving" @click="() => handleSave()">
+            <n-button type="primary" :loading="saving" :disabled="coverUploading" @click="() => handleSave()">
               <template #icon><n-icon :component="SaveOutline" /></template>
               Save
             </n-button>
@@ -461,6 +468,9 @@ onUnmounted(() => {
           <aside class="metadata-column">
             <section class="meta-panel">
               <n-form label-placement="top" class="meta-form">
+                <n-form-item label="封面" class="cover-field">
+                  <ManagedImageField :key="blogId" v-model="form.coverUrl" purpose="COVER" :disabled="saving" @uploading="coverUploading = $event" />
+                </n-form-item>
                 <n-form-item label="Title">
                   <n-input v-model:value="form.title" size="large" :maxlength="20" show-count class="custom-input" />
                 </n-form-item>
@@ -583,6 +593,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.cover-field { grid-column: 1 / -1; }
 
 
 .private-detail-page {

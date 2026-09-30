@@ -14,7 +14,7 @@ const theme = useThemeStore()
 const route = useRoute()
 const router = useRouter()
 const open = ref(false)
-const avatar = computed(() => resolveAvatarUrl(user.userInfo?.avatar))
+const avatar = computed(() => resolveAvatarUrl(user.userInfo?.avatarUrl))
 const profile = computed(() => user.userInfo?.id ? '/' + user.userInfo.id : '/login')
 const links = computed(() => [
   { label: '发现', path: '/', icon: CompassOutline },

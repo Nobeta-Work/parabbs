@@ -14,6 +14,8 @@ import { useUserStore } from '@/stores/user'
 import type { BlogPublicBriefVO, UserInfoVO, UserSex } from '@/types'
 import ArticleCard from '@/components/ArticleCard.vue'
 import ProfileIntro from '@/components/ProfileIntro.vue'
+import ContentImage from '@/components/ContentImage.vue'
+import ManagedImageField from '@/components/ManagedImageField.vue'
 
 const route = useRoute()
 const userStore = useUserStore()
@@ -23,7 +25,10 @@ const uid = computed(() => String(route.params.uid || ''))
 const isCurrentUser = computed(() => String(userStore.userInfo?.id ?? '') === uid.value)
 
 const user = ref<UserInfoVO | null>(null)
-const userAvatarUrl = computed(() => resolveAvatarUrl(user.value?.avatar))
+const backgroundLoaded = ref(false)
+const backgroundUploading = ref(false)
+watch(() => user.value?.backgroundImageUrl, () => { backgroundLoaded.value = false })
+const userAvatarUrl = computed(() => resolveAvatarUrl(user.value?.avatarUrl))
 const blogList = ref<BlogPublicBriefVO[]>([])
 const blogTotal = ref(0)
 const blogPage = ref(1)
@@ -60,7 +65,7 @@ function resetPortrait(event: PointerEvent) {
 // Edit Profile Logic
 const showEditModal = ref(false)
 const editForm = ref({
-  nickname: '', sex: 2 as UserSex, race: ''
+  nickname: '', sex: 2 as UserSex, race: '', signature: '', backgroundImageUrl: null as string | null,
 })
 const saving = ref(false)
 
@@ -179,7 +184,8 @@ const confirmCrop = async () => {
     
     if (blob) {
       const file = new File([blob], 'avatar.png', { type: 'image/png' })
-      await updateCurrentUserAvatar(file)
+      const { avatarUrl } = await updateCurrentUserAvatar(file)
+      if (userStore.userInfo) userStore.userInfo.avatarUrl = avatarUrl
       message.success('头像更新成功')
       showCropModal.value = false
       fetchProfile()
@@ -196,28 +202,31 @@ const openEditModal = () => {
   editForm.value = {
     nickname: user.value.nickname,
     sex: user.value.sex,
-    race: user.value.race
+    race: user.value.race,
+    signature: user.value.signature ?? '',
+    backgroundImageUrl: user.value.backgroundImageUrl ?? null,
   }
   showEditModal.value = true
 }
 
 const handleSaveProfile = async () => {
+  if (saving.value || backgroundUploading.value || !isCurrentUser.value) return
   if (!editForm.value.nickname) {
     message.warning('Nickname is required')
     return
   }
   saving.value = true
   try {
-    const { nickname, sex, race } = editForm.value
+    const { nickname, sex, race, signature, backgroundImageUrl } = editForm.value
 
-    await updateCurrentUserProfile({ nickname, sex, race })
+    await updateCurrentUserProfile({ nickname, sex, race, signature, backgroundImageUrl })
     message.success('Profile Updated')
     showEditModal.value = false
     fetchProfile()
 
     // Update store if current user
     if (userStore.userInfo && String(userStore.userInfo.id ?? '') === uid.value) {
-       userStore.userInfo = { ...userStore.userInfo, nickname, sex, race }
+       userStore.userInfo = { ...userStore.userInfo, nickname, sex, race, signature, backgroundImageUrl }
     }
   } catch (error) {
     message.error('Failed to update profile')
@@ -288,7 +297,11 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="profile-page" :class="{ 'loaded': pageLoaded }">
+  <div class="profile-page" :class="{ loaded: pageLoaded, 'has-background': backgroundLoaded }">
+    <ContentImage :src="user?.backgroundImageUrl" alt="" eager class="profile-background" @load="backgroundLoaded = true" @error="backgroundLoaded = false" />
+    <button v-if="isCurrentUser && user" class="edit-btn" @click="openEditModal">
+      <n-icon :component="PencilOutline" />编辑资料
+    </button>
     <n-spin :show="loading">
       <div class="container" v-if="user">
 
@@ -312,8 +325,6 @@ onUnmounted(() => {
 <ProfileIntro v-if="user.signature" :text="user.signature" class="signature" />
 
 </div>
-          <button v-if="isCurrentUser" class="edit-btn" @click="openEditModal">
-<n-icon :component="PencilOutline" />编辑资料</button>
         </header>
         <section class="publications">
 <h2><span>文章</span><small>{{ String(blogTotal).padStart(2, '0') }}</small></h2>
@@ -332,11 +343,11 @@ onUnmounted(() => {
     </n-spin>
 
     <!-- Edit Modal -->
-    <n-modal v-model:show="showEditModal" :mask-closable="true">
+    <n-modal v-model:show="showEditModal" :mask-closable="!saving && !backgroundUploading" :close-on-esc="!saving && !backgroundUploading">
       <div class="edit-modal-content">
         <div class="modal-header">
           <h3>编辑资料</h3>
-          <button class="close-btn" aria-label="关闭" @click="showEditModal = false">
+          <button class="close-btn" aria-label="关闭" :disabled="saving || backgroundUploading" @click="showEditModal = false">
             <n-icon size="24">
 <CloseOutline />
 </n-icon>
@@ -345,19 +356,28 @@ onUnmounted(() => {
         
         <n-form :model="editForm" label-placement="top" class="edit-form">
           <n-form-item label="昵称">
-            <n-input v-model:value="editForm.nickname" placeholder="输入昵称" />
+            <n-input v-model:value="editForm.nickname" placeholder="输入昵称" :maxlength="10" :disabled="saving" />
           </n-form-item>
           
           <n-form-item label="性别">
-            <n-radio-group v-model:value="editForm.sex" name="sex">
+            <n-radio-group v-model:value="editForm.sex" name="sex" :disabled="saving">
               <n-radio :value="1">男</n-radio>
               <n-radio :value="2">女</n-radio>
               <n-radio :value="0">保密</n-radio>
             </n-radio-group>
           </n-form-item>
+          <n-form-item label="种族">
+            <n-input v-model:value="editForm.race" :maxlength="10" :disabled="saving" />
+          </n-form-item>
+          <n-form-item label="简介">
+            <n-input v-model:value="editForm.signature" type="textarea" :maxlength="255" show-count :autosize="{ minRows: 2, maxRows: 4 }" :disabled="saving" placeholder="写一句关于自己的话" />
+          </n-form-item>
+          <n-form-item label="主页背景">
+            <ManagedImageField :key="uid" v-model="editForm.backgroundImageUrl" purpose="BACKGROUND" :disabled="saving" @uploading="backgroundUploading = $event" />
+          </n-form-item>
           
           <div class="modal-actions">
-            <button class="save-btn" @click="handleSaveProfile" :disabled="saving">
+            <button class="save-btn" @click="handleSaveProfile" :disabled="saving || backgroundUploading">
               {{ saving ? '保存中…' : '保存修改' }}
             </button>
           </div>
@@ -411,8 +431,53 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.profile-background {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  background: transparent;
+}
+.has-background .profile-header {
+  --text-primary: #fff;
+  --text-secondary: #f4f4f6;
+  --text-tertiary: #e1e1e7;
+  --line-color: rgb(255 255 255 / .4);
+  color: var(--text-primary);
+}
+.has-background::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(120deg, rgb(12 16 24 / .78), rgb(12 16 24 / .6));
+  pointer-events: none;
+}
+.has-background .cover-orbit { visibility: hidden; }
+.has-background .profile-header { background: transparent; border-color: rgb(255 255 255 / .25); }
+.has-background .profile-masthead,
+.has-background .profile-masthead span:first-child,
+.has-background .publications > h2,
+.has-background .publications > h2 small,
+.has-background .journey-note,
+.has-background .journey-sentinel,
+.has-background .empty-state { color: #fff; border-color: rgb(255 255 255 / .6); }
+.has-background .edit-btn,
+.has-background :deep(.typing-toggle) {
+  color: #fff;
+  background: #24242b;
+  border-color: rgb(255 255 255 / .5);
+}
+.has-background :deep(.typing-caret) { background: #fff; }
 .profile-page {
-  padding: 24px 48px 64px;
+  position: relative;
+  isolation: isolate;
+  min-height: 100dvh;
+  box-sizing: border-box;
+  padding: 76px 48px 64px;
+  background: radial-gradient(ellipse at 90% 5%, var(--accent-soft), transparent 55%), linear-gradient(135deg, var(--bg-primary) 50%, var(--bg-secondary));
 }
 
 .container {
@@ -489,6 +554,9 @@ h1 {
 }
 
 .edit-modal-content {
+  box-sizing: border-box;
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
   border-radius: 24px;
   background: var(--modal-bg);
   padding: 40px;
@@ -658,7 +726,7 @@ h1 {
 
 @media (max-width:640px) {
   .profile-page {
-    padding: 20px 18px 48px;
+    padding: 76px 18px 48px;
   }
   .profile-header {
     flex-wrap: wrap;
@@ -863,7 +931,7 @@ h1 {
 
 .profile-header {
   grid-template-columns: 220px minmax(0, 1fr);
-  grid-template-rows: auto auto;
+  grid-template-rows: auto;
   height: auto;
   min-height: 360px;
   padding: 44px;
@@ -935,7 +1003,7 @@ h1 {
 
 .profile-avatar {
   grid-column: 1;
-  grid-row: 1 / 3;
+  grid-row: 1;
   align-self: center;
   position: relative;
   width: 220px;
@@ -1002,9 +1070,10 @@ h1 {
 }
 
 .edit-btn {
-  grid-column: 2;
-  grid-row: 2;
-  justify-self: start;
+  position: absolute;
+  top: 20px;
+  right: 28px;
+  z-index: 2;
   margin: 0;
   font-size: 12px;
   padding: 9px 14px;
@@ -1110,10 +1179,6 @@ h1 {
   .profile-info {
     grid-column: 1;
     grid-row: 2;
-  }
-  .edit-btn {
-    grid-column: 1;
-    grid-row: 3;
   }
   .profile-info h1 {
     font-size: 36px;

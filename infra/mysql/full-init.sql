@@ -194,7 +194,7 @@ CREATE TABLE `like_comment` (
 
 CREATE TABLE `image_file` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '文件主键',
-    `storage_key` VARCHAR(255) COLLATE utf8mb4_bin NOT NULL COMMENT '相对配置存储目录的文件键',
+    `storage_key` VARCHAR(255) COLLATE utf8mb4_bin NOT NULL COMMENT '根目录下year/month/day/uuid.extension，不按用途分目录',
     `public_url` VARCHAR(2048) COLLATE utf8mb4_bin NOT NULL COMMENT '完整公开URL',
     `user_id` BIGINT DEFAULT NULL COMMENT '上传者，历史无主记录可空',
     `purpose` VARCHAR(16) NOT NULL COMMENT 'AVATAR/BACKGROUND/COVER',

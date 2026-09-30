@@ -5,11 +5,11 @@
  * Reruns preserve existing profiles and image records, including later edits.
  * Set @image_public_base_url to the same para.file.managed.public-base-url used
  * by the deployment (the URL serving the existing avatar storage directory):
- *   SET @image_public_base_url = 'http://localhost:8080/bbs/i/avatar/';
+ *   SET @image_public_base_url = 'http://localhost:8080/bbs/i/';
  * Use the MySQL client without --force so validation failures stop the script.
  */
 USE `para_bbs`;
-SET @image_public_base_url = COALESCE(@image_public_base_url, 'https://nobeta.cn/bbs/i/avatar/');
+SET @image_public_base_url = COALESCE(@image_public_base_url, 'https://nobeta.cn/bbs/i/');
 
 CREATE TABLE IF NOT EXISTS `user_profile` (
     `user_id` BIGINT NOT NULL COMMENT '用户主键，与认证表共享ID',
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS `user_profile` (
 
 CREATE TABLE IF NOT EXISTS `image_file` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '文件主键',
-    `storage_key` VARCHAR(255) COLLATE utf8mb4_bin NOT NULL COMMENT '相对配置存储目录的文件键',
+    `storage_key` VARCHAR(255) COLLATE utf8mb4_bin NOT NULL COMMENT '根目录下year/month/day/uuid.extension，不按用途分目录',
     `public_url` VARCHAR(2048) COLLATE utf8mb4_bin NOT NULL COMMENT '完整公开URL',
     `user_id` BIGINT DEFAULT NULL COMMENT '上传者，历史无主记录可空',
     `purpose` VARCHAR(16) NOT NULL COMMENT 'AVATAR/BACKGROUND/COVER',

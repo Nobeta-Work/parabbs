@@ -11,7 +11,7 @@ watch(() => route.path, async () => { await nextTick(); window.scrollTo({ top: 0
 <template>
 <div class="main-layout" :style="{ '--sidebar-width': collapsed ? '80px' : '240px' }">
 <TopNav v-model:collapsed="collapsed" />
-<div class="page-container">
+<div class="page-container" :class="{ 'page-container--flush': route.meta.fullBleed }">
 <router-view />
 </div>
 </div>
@@ -29,6 +29,8 @@ watch(() => route.path, async () => { await nextTick(); window.scrollTo({ top: 0
   min-width: 0;
   padding-top: 24px;
 }
+
+.page-container--flush { padding-top: 0; }
 
 @media (max-width: 900px) {
   .page-container {

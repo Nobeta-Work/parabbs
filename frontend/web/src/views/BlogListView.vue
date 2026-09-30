@@ -81,7 +81,8 @@ const handleCreateBlog = async () => {
   try {
     const blogId = await createPrivateBlog({
       title: createForm.value.title,
-      folderId: 0
+      folderId: 0,
+      coverUrl: null,
     })
     message.success('创建成功')
     showCreateModal.value = false
@@ -106,7 +107,7 @@ onUnmounted(() => { active = false; observer?.disconnect(); dispose() })
   <div class="blog-list-page">
     <div class="archive-masthead"><span>PARA BBS</span><span>文章</span></div>
     <!-- Hero Header -->
-    <div class="hero-section editorial-surface">
+    <div class="hero-section">
       <div class="hero-content">
 <div class="archive-title">
 <h1>文章</h1>
@@ -152,7 +153,7 @@ onUnmounted(() => { active = false; observer?.disconnect(); dispose() })
       <n-spin :show="loading && !blogList.length">
         <div v-if="blogList.length > 0">
           <div class="blog-grid">
-<div v-for="(blog, index) in blogList" :key="blog.id" class="archive-entry"><span class="archive-number" aria-hidden="true">{{ String(index + 1).padStart(2, '0') }}</span><ArticleCard :blog="blog" /></div>
+<div v-for="(blog, index) in blogList" :key="blog.id" class="archive-entry"><span class="archive-number" aria-hidden="true">{{ String(index + 1).padStart(2, '0') }}</span><ArticleCard :blog="blog" layout="archive" /></div>
 </div>
 
 
@@ -197,8 +198,8 @@ onUnmounted(() => { active = false; observer?.disconnect(); dispose() })
 }
 
 .hero-content {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 420px);
   align-items: stretch;
   gap: 22px;
 }
@@ -215,7 +216,7 @@ onUnmounted(() => { active = false; observer?.disconnect(); dispose() })
 }
 
 .hero-search-input {
-  border-radius: 28px;
+  border-radius: 4px;
 }
 
 .search-btn, .create-btn, .save-btn {
@@ -237,7 +238,7 @@ onUnmounted(() => { active = false; observer?.disconnect(); dispose() })
 
 .sort-selector {
   display: flex;
-  gap: 10px;
+  gap: 24px;
 }
 
 .create-btn {
@@ -355,9 +356,10 @@ onUnmounted(() => { active = false; observer?.disconnect(); dispose() })
 
 .sort-chip {
   border: 0;
-  border-radius: 22px;
-  padding: 9px 17px;
-  background: var(--bg-secondary);
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 8px 0;
+  background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
   font-size: 13px;
@@ -365,7 +367,7 @@ onUnmounted(() => { active = false; observer?.disconnect(); dispose() })
 
 .sort-chip.selected {
   color: var(--accent-color);
-  background: var(--accent-soft);
+  border-bottom-color: var(--accent-color);
 }
 
 .archive-masthead {
@@ -384,21 +386,20 @@ onUnmounted(() => { active = false; observer?.disconnect(); dispose() })
 }
 
 .hero-section {
-  margin-top: 12px;
-  padding: 36px 32px 24px;
-  border-radius: 4px 4px 36px 4px;
-  border-bottom: 1px solid color-mix(in srgb, var(--accent-color) 22%, var(--line-color));
+  margin-top: 0;
+  padding: 28px 0 20px;
+  border-bottom: 3px double var(--text-primary);
 }
 
 .archive-title h1 {
-  font-family: var(--font-sans);
+  font-family: 'Songti SC', SimSun, Georgia, serif;
   font-size: 42px;
   font-weight: 500;
-  letter-spacing: .08em;
+  letter-spacing: .02em;
 }
 
 .hero-footer {
-  margin: 22px 0 0;
+  margin: 20px 0 0;
 }
 
 .blog-grid {
@@ -438,8 +439,9 @@ onUnmounted(() => { active = false; observer?.disconnect(); dispose() })
 
 @media (max-width:640px) {
   .hero-section {
-    padding: 28px 20px 22px;
+    padding: 24px 0 20px;
   }
+  .hero-content { grid-template-columns: minmax(0, 1fr); gap: 18px; }
   .archive-title h1 {
     font-size: 34px;
   }

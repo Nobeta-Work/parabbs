@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ContentImage from '@/components/ContentImage.vue'
 import { computed, h, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import VditorPreview from '@/components/editor/VditorPreview.vue'
@@ -76,7 +77,7 @@ const {
 
 const blogId = computed(() => String(route.params.id || ''))
 const content = computed(() => blog.value?.content || '')
-const authorAvatarUrl = computed(() => resolveAvatarUrl(blog.value?.author.avatar))
+const authorAvatarUrl = computed(() => resolveAvatarUrl(blog.value?.author.avatarUrl))
 const canEdit = computed(() => {
   const authorId = String(blog.value?.author.id ?? '')
   const currentId = String(userStore.userInfo?.id ?? '')
@@ -488,7 +489,9 @@ onUnmounted(() => {
         </template>
       </n-result>
 
-      <div v-else-if="blog" class="detail-shell">
+      <template v-else-if="blog">
+      <ContentImage :src="blog.coverUrl" :alt="blog.title + '封面'" eager class="article-cover" />
+      <div class="detail-shell">
         <aside class="detail-sidebar">
           <section class="author-card editorial-surface">
             <n-avatar
@@ -561,6 +564,7 @@ onUnmounted(() => {
             </div>
 
             </header>
+
 
             <div v-if="content" ref="previewRef" class="article-preview-container">
               <VditorPreview
@@ -635,7 +639,7 @@ onUnmounted(() => {
                     <n-avatar
                       round
                       :size="38"
-                      :src="resolveAvatarUrl(comment.author.avatar)"
+                      :src="resolveAvatarUrl(comment.author.avatarUrl)"
                       :render-icon="renderDefaultAvatar"
                     />
                     <div class="comment-body">
@@ -679,7 +683,7 @@ onUnmounted(() => {
                       <n-avatar
                         round
                         :size="32"
-                        :src="resolveAvatarUrl(reply.author.avatar)"
+                        :src="resolveAvatarUrl(reply.author.avatarUrl)"
                         :render-icon="renderDefaultAvatar"
                       />
                       <div class="comment-body">
@@ -736,6 +740,7 @@ onUnmounted(() => {
           </section>
         </div>
       </div>
+      </template>
     </n-spin>
 
     <button
@@ -752,6 +757,10 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.article-cover {
+  height: clamp(220px, 32vw, 460px);
+  aspect-ratio: auto;
+}
 .public-detail-page {
   min-height: 100vh;
   background: var(--bg-primary);
@@ -1207,11 +1216,12 @@ onUnmounted(() => {
 }
 
 .public-detail-page {
-  padding: 28px 32px 64px;
+  padding: 0 0 64px;
 }
 
 .detail-shell {
-  width: min(1140px, 100%);
+  width: min(1140px, calc(100% - 64px));
+  margin-top: 28px;
   grid-template-columns: minmax(0, 1fr) 180px;
   gap: 40px;
 }
@@ -1461,8 +1471,9 @@ onUnmounted(() => {
 
 @media (max-width:640px) {
   .public-detail-page {
-    padding: 16px 20px 44px;
+    padding: 0 0 44px;
   }
+  .detail-shell { width: calc(100% - 36px); margin-top: 22px; }
   .article-card {
     padding: 0 0 30px;
   }

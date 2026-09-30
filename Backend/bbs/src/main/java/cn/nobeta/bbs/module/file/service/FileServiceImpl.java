@@ -47,7 +47,7 @@ public class FileServiceImpl implements FileService {
             : fileConfig.getManaged().getMaxSize();
         validateFile(file, limit);
         LocalDate now = LocalDate.now();
-        String key = (purpose == ImagePurpose.AVATAR ? "" : purpose.name().toLowerCase(java.util.Locale.ROOT) + "/") + now.getYear() + "/"
+        String key = now.getYear() + "/"
             + now.getMonthValue() + "/" + now.getDayOfMonth() + "/"
             + UUID.randomUUID().toString().replace("-", "") + EXTENSIONS.get(file.getContentType());
         String base = fileConfig.getManaged().getPublicBaseUrl();

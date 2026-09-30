@@ -34,6 +34,7 @@ const routes: Array<RouteRecordRaw> = [
                 meta: {
                     requiresAuth: false,
                     title: '博客详情 | Para BBS',
+                    fullBleed: true,
                 }
             },
             {
@@ -73,6 +74,7 @@ const routes: Array<RouteRecordRaw> = [
                 meta: {
                     requiresAuth: false,
                     title: '个人主页 | Para BBS',
+                    fullBleed: true,
                 }
             }
         ]

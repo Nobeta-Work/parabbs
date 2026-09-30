@@ -501,7 +501,7 @@ onMounted(loadAll)
                     <tr v-for="user in users.records" :key="user.id">
                       <td>
                         <div class="identity-cell">
-                          <n-avatar round size="small" :src="resolveAvatarUrl(user.avatar)" />
+                          <n-avatar round size="small" :src="resolveAvatarUrl(user.avatarUrl)" />
                           <div><strong>{{ user.nickname || user.username }}</strong><small>@{{ user.username }}</small></div>
                         </div>
                       </td>

@@ -9,7 +9,7 @@ export interface AdminUserVO {
   id: ApiId
   username: string
   nickname: string
-  avatar: string | null
+  avatarUrl: string | null
   status: 0 | 1
   createTime: string
   roleCodes: string[]
@@ -30,6 +30,7 @@ export interface AdminBlogVO {
   id: ApiId
   title: string
   summary: string | null
+  coverUrl: string | null
   authorId: ApiId
   authorName: string
   isPublished: 0 | 1

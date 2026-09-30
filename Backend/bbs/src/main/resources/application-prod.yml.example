@@ -6,7 +6,7 @@ para:
   file:
     managed:
       root-path: /data/parabbs/avatar/
-      public-base-url: https://nobeta.cn/bbs/i/avatar/
+      public-base-url: https://nobeta.cn/bbs/i/
       avatar-max-size: 10485760
       max-size: 15728640
       expire: 2

@@ -7,7 +7,8 @@ export interface UserInfo {
     id: number | null
     username: string | null
     nickname: string | null
-    avatar: string | null
+    avatarUrl: string | null
+    backgroundImageUrl?: string | null
     token: string | null
     refreshToken?: string | null
     tokenExpireIn?: string | null
@@ -47,13 +48,14 @@ export interface TokenVO {
 export interface UserBriefVO {
     id: ApiId
     nickname: string
-    avatar: string | null
+    avatarUrl: string | null
 }
 
 export interface UserInfoVO {
     id: ApiId
     nickname: string
-    avatar: string | null
+    avatarUrl: string | null
+    backgroundImageUrl: string | null
     sex: UserSex
     race: string
     signature: string | null
@@ -69,6 +71,8 @@ export interface UserProfileDTO {
     nickname: string
     sex: UserSex
     race: string
+    signature: string
+    backgroundImageUrl: string | null
 }
 
 export interface PasswordEditDTO {
@@ -77,5 +81,5 @@ export interface PasswordEditDTO {
 }
 
 export interface AvatarVO {
-    avatarKey: string
+    avatarUrl: string
 }

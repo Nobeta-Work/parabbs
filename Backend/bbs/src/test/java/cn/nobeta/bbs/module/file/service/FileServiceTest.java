@@ -54,6 +54,23 @@ class FileServiceTest {
     }
 
     @Test
+    void upload_shouldUseSameDateDirectoryForEveryPurpose() throws Exception {
+        byte[] png = new byte[] {(byte)137, 80, 78, 71, 13, 10, 26, 10};
+        for (ImagePurpose purpose : ImagePurpose.values()) {
+            String url = service.uploadManagedImage(1L, purpose,
+                new MockMultipartFile("file", "image.png", "image/png", png));
+            assertThat(url).matches("https://example[.]com/images/[0-9]{4}/[0-9]{1,2}/[0-9]{1,2}/[a-f0-9]{32}[.]png");
+            assertThat(root.resolve(url.substring("https://example.com/images/".length()))).exists();
+        }
+        var images = org.mockito.ArgumentCaptor.forClass(ImageFile.class);
+        verify(mapper, times(3)).insertImage(images.capture());
+        assertThat(images.getAllValues()).extracting(ImageFile::getPurpose)
+            .containsExactly(ImagePurpose.values());
+        assertThat(images.getAllValues()).allSatisfy(image ->
+            assertThat(image.getPublicUrl()).isEqualTo("https://example.com/images/" + image.getStorageKey()));
+    }
+
+    @Test
     void upload_shouldRejectSpoofedImageContent() {
         var file = new MockMultipartFile("file", "image.png", "image/png", "not an image".getBytes());
         assertThatThrownBy(() -> service.uploadManagedImage(1L, ImagePurpose.COVER, file))

@@ -346,6 +346,7 @@ async function submitCreateBlog(): Promise<void> {
     const id = await createPrivateBlog({
       title,
       folderId: selectedFolderId.value,
+      coverUrl: null,
     })
     createBlogModal.show = false
     createBlogModal.title = ''
@@ -622,7 +623,7 @@ onMounted(async () => {
                         <n-avatar
                           round
                           size="small"
-                          :src="resolveAvatarUrl(blog.author.avatar)"
+                          :src="resolveAvatarUrl(blog.author.avatarUrl)"
                           class="blog-author-avatar"
                         />
                         <span class="blog-like-count">

@@ -44,6 +44,7 @@ export const PHASE_ONE_PLANNED_ROUTES = [
 
 declare module 'vue-router' {
     interface RouteMeta {
+        fullBleed?: boolean
         requiresAuth?: boolean
         roles?: UserRole[]
         title?: string

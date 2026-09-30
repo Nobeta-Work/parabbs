@@ -8,6 +8,7 @@ export interface BlogBaseVO {
     id: ApiId
     title: string
     summary: string | null
+    coverUrl: string | null
     isPublished: PublishStatus
     likeCount: number
     commentsCount: number
@@ -40,10 +41,12 @@ export interface BlogPageQuery extends PageQuery {
 
 export interface BlogSaveDTO {
     title: string
+    coverUrl: string | null
     folderId?: ApiId
 }
 
 export interface BlogEditDTO {
+    coverUrl: string | null
     folderId: ApiId
     isPublished: PublishStatus
     title: string
