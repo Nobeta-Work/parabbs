@@ -35,6 +35,19 @@ output/
 # Temp files
 nul
 
+# Local validation pages, screenshots and test outputs
+/verification/
+/test-results/
+/playwright-report/
+/coverage/
+/.playwright/
+/.vitest/
+/tests/screenshots/
+/tests/fixtures/toolbar.html
+/tests/fixtures/toolbar.ts
+/layout-verification.html
+/playwright.layout.test.js
+
 # Generated typings
 src/auto-imports.d.ts
 src/components.d.ts

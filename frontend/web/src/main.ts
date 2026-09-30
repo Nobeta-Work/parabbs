@@ -3,8 +3,7 @@ import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
 
-import '@nobeta/vrind/style.css'
-import '@/styles/global.scss'
+import '@/styles/global.css'
 
 const app = createApp(App)
 

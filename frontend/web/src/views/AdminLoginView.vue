@@ -81,15 +81,14 @@ async function submit(): Promise<void> {
 </template>
 
 <style scoped>
+
 .admin-login-page {
   min-height: 100vh;
   display: grid;
   place-items: center;
   padding: 24px;
   background:
-    radial-gradient(circle at 20% 10%, color-mix(in srgb, var(--accent-color) 14%, transparent), transparent 34%),
-    radial-gradient(circle at 84% 82%, color-mix(in srgb, var(--accent-highlight) 14%, transparent), transparent 34%),
-    var(--bg-primary);
+    var(--bg-secondary);
   color: var(--text-primary);
 }
 
@@ -98,8 +97,8 @@ async function submit(): Promise<void> {
   padding: 38px;
   border: 1px solid var(--line-color);
   background: color-mix(in srgb, var(--bg-primary) 88%, transparent);
-  box-shadow: 0 24px 70px color-mix(in srgb, var(--text-primary) 12%, transparent);
-  backdrop-filter: blur(18px);
+  box-shadow: none;
+  border-radius: 28px;
 }
 
 .back-link {
@@ -125,7 +124,7 @@ async function submit(): Promise<void> {
   margin: 48px 0 22px;
   place-items: center;
   border: 1px solid var(--accent-color);
-  border-radius: 18px;
+  border-radius: 2px;
   color: var(--accent-color);
   font-size: 28px;
 }
@@ -134,13 +133,13 @@ async function submit(): Promise<void> {
   margin: 0 0 9px;
   color: var(--accent-highlight);
   font-size: 0.76rem;
-  letter-spacing: 2px;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
 h1 {
   margin: 0;
-  font-size: clamp(2rem, 5vw, 3rem);
+  font-size: 28px;
   line-height: 1.1;
 }
 
@@ -153,6 +152,8 @@ h1 {
 @media (max-width: 520px) {
   .admin-login-card {
     padding: 28px 22px;
+    border-radius: 28px;
   }
 }
+
 </style>

@@ -1,0 +1,427 @@
+:root {
+  color-scheme: light;
+  --font-display: var(--font-sans);
+  --font-body: var(--font-sans);
+  --font-sans: 'Segoe UI Variable', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-mono: 'Cascadia Code', 'SFMono-Regular', Consolas, monospace;
+  --site-font-family: var(--font-sans);
+  --bg-primary: white;
+  --bg-secondary: #f7f7f8;
+  --text-primary: #1f1f1f;
+  --text-secondary: #5d5c63;
+  --text-tertiary: #77757e;
+  --accent-color: #ce3c4c;
+  --on-accent: #ffffff;
+  --accent-soft: #fff0f2;
+  --accent-highlight: #b72d3d;
+  --line-color: #e9e8ec;
+  --card-hover: #fff5f6;
+  --modal-bg: var(--bg-primary);
+  --bg-color: var(--bg-primary);
+  --editor-inline-code-color: #7450a8;
+  --editor-inline-code-bg: #f3effa;
+  --editor-link-color: #2563ad;
+  --editor-strong-color: #c03535;
+  --editor-em-color: #b75a12;
+  --editor-quote-color: #278478;
+  --editor-quote-bg: #f0f8f6;
+}
+
+html.dark {
+  --editor-inline-code-color: #cfb5ff;
+  --editor-inline-code-bg: #30283e;
+  --editor-link-color: #8ab8f5;
+  --editor-quote-color: #6fc7b9;
+  --editor-quote-bg: #20322f;
+  --editor-strong-color: #ff9b9b;
+  --editor-em-color: #ffbd80;
+  color-scheme: dark;
+  --bg-primary: #19191d;
+  --bg-secondary: #242429;
+  --text-primary: #efedf1;
+  --text-secondary: #c7c4cc;
+  --text-tertiary: #aba6b3;
+  --accent-color: #ff9ca8;
+  --on-accent: #19191d;
+  --accent-soft: #3e272f;
+  --accent-highlight: #ffbdc5;
+  --line-color: #3c3942;
+  --card-hover: #302b34;
+}
+
+html, body, #app {
+  min-height: 100%;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,input,textarea,select {
+  font: inherit;
+}
+
+a,button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+a {
+  text-underline-offset: 4px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 4px;
+}
+
+::selection {
+  background: color-mix(in srgb,var(--accent-color) 18%,transparent);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb,var(--text-primary) 22%,transparent);
+  border-radius: 4px;
+}
+
+/* Keep native Vditor semantics and highlighting; only bridge the site's design tokens. */
+
+.vditor.vditor {
+  --panel-background-color: var(--bg-primary);
+  --toolbar-background-color: var(--bg-primary);
+  --textarea-background-color: var(--bg-primary);
+  --textarea-text-color: var(--text-primary);
+  --border-color: var(--line-color);
+  --second-color: var(--text-secondary);
+  --toolbar-icon-color: var(--text-secondary);
+  --toolbar-icon-hover-color: var(--accent-color);
+  --blockquote-color: var(--text-secondary);
+  --heading-border-color: var(--line-color);
+  --ir-heading-color: var(--text-primary);
+  --ir-link-color: var(--editor-link-color);
+  border-color: var(--line-color);
+  border-radius: 8px;
+  background: var(--bg-primary);
+}
+
+.vditor .vditor-reset, .vditor-preview-host.vditor-reset {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--text-primary);
+}
+
+.vditor-reset :is(h1,h2,h3,h4,h5,h6) {
+  font-family: var(--font-body);
+  font-weight: 600;
+  line-height: 1.65;
+  color: var(--text-primary);
+  scroll-margin-top: 160px;
+}
+
+:is(.vditor .vditor-reset, .vditor-preview-host.vditor-reset) a {
+  color: var(--editor-link-color);
+}
+
+.vditor-reset :is(code,code *),.vditor-sv,.vditor-sv * {
+  font-family: var(--font-mono) !important;
+}
+
+:is(.vditor .vditor-reset, .vditor-preview-host.vditor-reset) code:not(.hljs):not([class*="language-"]):not(pre:not(.vditor-reset) > code) {
+  color: var(--editor-inline-code-color);
+  background: var(--editor-inline-code-bg);
+  border-radius: 8px;
+  padding: .12em .3em;
+}
+
+.vditor-reset pre {
+  border: 1px solid var(--line-color);
+  box-shadow: none;
+  border-radius: 12px;
+}
+
+.vditor-reset pre>code {
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+:is(.vditor .vditor-reset, .vditor-preview-host.vditor-reset) blockquote:not(.callout):not([data-type="callout"]) {
+  border-left: 4px solid var(--editor-link-color);
+  background: var(--editor-quote-bg);
+  padding: .5em 1em;
+  color: var(--text-secondary);
+}
+
+.vditor-toolbar {
+  background: var(--bg-secondary) !important;
+  border-bottom: 1px solid var(--line-color);
+  font-family: var(--font-sans);
+  padding: 8px 12px;
+  border-radius: 16px 16px 0 0;
+}
+
+.vditor-counter {
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+}
+
+@media (max-width:640px) {
+  .vditor .vditor-reset, .vditor-preview-host.vditor-reset {
+    font-size: 15px;
+  }
+}
+
+@media (prefers-reduced-motion:reduce) {
+  *,*::before,*::after {
+    animation-duration: .01ms !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.vditor-toolbar__item > button {
+  border-radius: 8px;
+}
+
+.vditor-toolbar__item > button:hover {
+  background: var(--accent-soft);
+}
+
+.vditor-panel {
+  border-radius: 12px;
+}
+
+.vditor-reset blockquote {
+  border-radius: 0 12px 12px 0;
+}
+
+.vditor--fullscreen .vditor-toolbar {
+  border-radius: 0;
+}
+
+/* WYSIWYG and IR use PRE as their editable root, not as a fenced code block. */
+
+:is(.vditor .vditor-reset, .vditor-preview-host.vditor-reset) strong {
+  color: var(--editor-strong-color);
+}
+
+:is(.vditor .vditor-reset, .vditor-preview-host.vditor-reset) em {
+  color: var(--editor-em-color);
+}
+
+:is(.vditor .vditor-reset, .vditor-preview-host.vditor-reset) p {
+  margin-top: 0;
+  margin-bottom: .65em;
+}
+
+:is(.vditor .vditor-reset, .vditor-preview-host.vditor-reset) table {
+  border-color: var(--line-color);
+}
+
+:is(.vditor .vditor-reset, .vditor-preview-host.vditor-reset) :is(th, td) {
+  border-color: var(--line-color);
+}
+
+:is(.vditor .vditor-reset, .vditor-preview-host.vditor-reset) tr {
+  background: var(--bg-primary);
+  border-color: var(--line-color);
+}
+
+:is(.vditor .vditor-reset, .vditor-preview-host.vditor-reset) :is(thead tr, tr:nth-child(2n)) {
+  background: var(--bg-secondary);
+}
+
+:is(.vditor .vditor-reset, .vditor-preview-host.vditor-reset) .language-mindmap:not(pre):not(code) {
+  height: 620px;
+  min-height: 620px;
+}
+
+:is(.vditor .vditor-reset, .vditor-preview-host.vditor-reset) .language-markmap:not(pre):not(code) {
+  min-height: 500px;
+}
+
+.vditor .vditor-reset[contenteditable="true"] {
+  padding-bottom: 35vh !important;
+  caret-color: var(--accent-color);
+}
+
+.vditor .vditor-reset[contenteditable="true"]:focus-visible {
+  outline: none;
+}
+
+@media (max-width:640px) {
+  :is(.vditor .vditor-reset, .vditor-preview-host.vditor-reset) .language-mindmap:not(pre):not(code) {
+    height: 500px;
+    min-height: 500px;
+  }
+}
+
+/* Size the actual graph surface before native renderers measure it. */
+
+:is(.vditor .vditor-reset, .vditor-preview-host.vditor-reset) .language-markmap > svg {
+  display: block;
+  width: 100%;
+  height: 620px;
+}
+
+:is(.vditor .vditor-reset, .vditor-preview-host.vditor-reset) .language-mindmap:not(pre):not(code) {
+  max-width: none;
+  flex-shrink: 0;
+}
+
+:is(.vditor .vditor-reset, .vditor-preview-host.vditor-reset) :is(pre, .vditor-wysiwyg__preview, .vditor-ir__preview):has(> .language-mindmap) {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.diagram-viewport {
+  width: 100%;
+  overflow-x: auto;
+}
+
+/* A denser writing rhythm; scope to editable roots so published typography stays independent. */
+
+.vditor :is(.vditor-wysiwyg, .vditor-ir) .vditor-reset[contenteditable="true"],
+.vditor .vditor-sv.vditor-reset[contenteditable="true"] {
+  line-height: 1.5;
+}
+
+.vditor .vditor-reset[contenteditable="true"] p {
+  margin: 0 0 .3em;
+}
+
+.vditor .vditor-reset[contenteditable="true"] :is(h1,h2,h3,h4,h5,h6) {
+  line-height: 1.35;
+  margin-top: 1em;
+  margin-bottom: .4em;
+}
+
+.vditor .vditor-reset[contenteditable="true"] > :first-child {
+  margin-top: 0;
+}
+
+.vditor .vditor-reset[contenteditable="true"] :is(ul,ol,blockquote) {
+  margin-top: .3em;
+  margin-bottom: .5em;
+}
+
+.vditor .vditor-reset[contenteditable="true"] li + li {
+  margin-top: .15em;
+}
+
+.vditor .vditor-reset[contenteditable="true"] li > p {
+  margin-bottom: .15em;
+}
+
+.vditor .vditor-reset[contenteditable="true"] pre > code {
+  line-height: 1.5;
+}
+
+/* Shared cover treatment for the journal surfaces; never applied to article prose. */
+
+.editorial-surface {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: linear-gradient(115deg, var(--bg-primary) 12%, color-mix(in srgb, var(--accent-soft) 48%, var(--bg-primary)) 72%, var(--accent-soft));
+}
+
+.editorial-surface::before, .editorial-surface::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 12%, transparent);
+  border-radius: 50%;
+  width: 420px;
+  height: 420px;
+  right: -150px;
+  top: -220px;
+}
+
+.editorial-surface::after {
+  width: 340px;
+  height: 340px;
+  right: -110px;
+  top: -180px;
+}
+
+/* A presentation-only language label; native copy text and Markdown remain untouched. */
+
+:is(.vditor .vditor-reset, .vditor-preview-host.vditor-reset) pre[data-code-language] {
+  position: relative;
+  padding-top: 32px;
+}
+
+:is(.vditor .vditor-reset, .vditor-preview-host.vditor-reset) pre[data-code-language]::before {
+  content: attr(data-code-language);
+  position: absolute;
+  top: 7px;
+  left: 14px;
+  right: 48px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 12px/18px var(--font-mono);
+  color: var(--text-tertiary);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Alt fallback stays outside the editable text and Markdown serialization. */
+
+:is(.vditor .vditor-reset, .vditor-preview-host.vditor-reset) p[data-alt-caption]::after {
+  content: attr(data-alt-caption);
+  display: block;
+  margin-top: 10px;
+  font: 13px/1.6 var(--font-body);
+  text-align: center;
+  color: var(--text-tertiary);
+  white-space: pre-wrap;
+  pointer-events: none;
+  user-select: none;
+}
+
+.vditor-preview-host.vditor-reset {
+  line-height: 1.85;
+}
+
+.vditor-preview-host.vditor-reset > p {
+  margin-block: 0 1.15em;
+}
+
+.vditor-preview-host.vditor-reset :is(h1,h2,h3) {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  letter-spacing: .025em;
+}
+
+.vditor-preview-host.vditor-reset h2 {
+  margin-top: 2em;
+  padding-bottom: .5em;
+  border-bottom: 1px solid var(--line-color);
+}
+
+.vditor-preview-host.vditor-reset figure.vditor-image {
+  margin: 2em 0;
+}
+
+.vditor-preview-host.vditor-reset figure.vditor-image figcaption {
+  margin-top: 12px;
+  font-size: 13px;
+  letter-spacing: .025em;
+  color: var(--text-tertiary);
+}

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/webIcon.png" />
@@ -16,7 +16,7 @@
           document.documentElement.style.colorScheme = isDark ? 'dark' : 'light'
           document
             .querySelector('meta[name="theme-color"]')
-            ?.setAttribute('content', isDark ? '#0f1115' : '#ffffff')
+            ?.setAttribute('content', isDark ? '#19191d' : '#ffffff')
         } catch {
           document.documentElement.dataset.theme = 'light'
         }
@@ -35,7 +35,7 @@
       }
 
       html.dark {
-        background: #0f1115;
+        background: #19191d;
         color: #e6e6e6;
       }
     </style>

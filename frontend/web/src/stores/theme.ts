@@ -13,7 +13,7 @@ export const useThemeStore = defineStore('theme', () => {
     document.documentElement.style.colorScheme = nextIsDark ? 'dark' : 'light'
     document
       .querySelector('meta[name="theme-color"]')
-      ?.setAttribute('content', nextIsDark ? '#0f1115' : '#ffffff')
+      ?.setAttribute('content', nextIsDark ? '#19191d' : '#ffffff')
     localStorage.setItem('theme', nextIsDark ? 'dark' : 'light')
   }
 

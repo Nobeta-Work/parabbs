@@ -588,6 +588,7 @@ onMounted(loadAll)
 </template>
 
 <style scoped>
+
 .admin-page {
   min-height: 100vh;
   padding: 38px 20px 90px;
@@ -616,7 +617,7 @@ onMounted(loadAll)
   color: var(--accent-highlight);
   font-size: 0.72rem;
   font-weight: 700;
-  letter-spacing: 2px;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
@@ -627,7 +628,7 @@ h2 {
 }
 
 h1 {
-  font-size: clamp(2.2rem, 5vw, 4rem);
+  font-size: 32px;
 }
 
 h2 {
@@ -651,7 +652,8 @@ h2 {
 .admin-modal {
   border: 1px solid var(--line-color);
   background: color-mix(in srgb, var(--bg-primary) 92%, transparent);
-  box-shadow: 0 18px 48px color-mix(in srgb, var(--text-primary) 7%, transparent);
+  box-shadow: none;
+  border-radius: 18px;
 }
 
 .admin-sidebar {
@@ -676,6 +678,7 @@ h2 {
   font: inherit;
   text-align: left;
   transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+  border-radius: 18px;
 }
 
 .section-button:hover,
@@ -749,7 +752,7 @@ h2 {
 .admin-table th {
   color: var(--text-tertiary);
   font-size: 0.72rem;
-  letter-spacing: 1.4px;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
@@ -805,14 +808,17 @@ h2 {
 .admin-modal {
   width: min(92vw, 460px);
   padding: 28px;
+  border-radius: 18px;
 }
 
 .admin-modal-wide {
   width: min(92vw, 620px);
+  border-radius: 18px;
 }
 
 .admin-modal h2 {
   margin-bottom: 20px;
+  border-radius: 18px;
 }
 
 .modal-subtitle {
@@ -840,6 +846,7 @@ h2 {
     grid-template-columns: 1fr;
     justify-items: center;
     text-align: center;
+    border-radius: 18px;
   }
 
   .section-button small,
@@ -871,6 +878,8 @@ h2 {
   .section-button {
     padding: 10px 4px;
     font-size: 0.8rem;
+    border-radius: 18px;
   }
 }
+
 </style>

@@ -1,15 +1,16 @@
 <script setup lang="ts">
-import { ref, onMounted, h } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  NInput, NSelect, NPagination, NModal,
-  NForm, NFormItem, NIcon, NEmpty, NSpin, useMessage, useDialog, NAvatar
+  NInput, NModal,
+  NForm, NFormItem, NIcon, NEmpty, NSpin, useMessage, useDialog
 } from 'naive-ui'
-import { Search, Add, ChatbubbleOutline, GridOutline, Person, HeartOutline } from '@vicons/ionicons5'
+import { Search, Add, GridOutline, ArrowForwardOutline } from '@vicons/ionicons5'
 import { createPrivateBlog, getPublicBlogPage } from '@/api/blog'
-import { resolveAvatarUrl } from '@/utils/avatar'
-import type { BlogPageQuery, BlogPublicBriefVO } from '@/types'
-import { DateUtils } from '@/types/date'
+import ArticleCard from '@/components/ArticleCard.vue'
+import { useInfiniteArticles } from '@/composables/useInfiniteArticles'
+import type { BlogPageQuery } from '@/types'
+
 import { useUserStore } from '@/stores/user'
 
 const router = useRouter()
@@ -18,9 +19,19 @@ const message = useMessage()
 const dialog = useDialog()
 const userStore = useUserStore()
 
-const loading = ref(false)
-const blogList = ref<BlogPublicBriefVO[]>([])
-const total = ref(0)
+const { items: blogList, loading, error, hasMore, loadMore, reset, dispose } = useInfiniteArticles(getPublicBlogPage)
+const sentinel = ref<HTMLElement | null>(null)
+let observer: IntersectionObserver | undefined
+let active = true
+async function fillViewport() {
+  await nextTick()
+  if (!active || loading.value || error.value || !hasMore.value || !sentinel.value) return
+  if (sentinel.value.getBoundingClientRect().top < window.innerHeight + 320) {
+    await loadMore()
+    if (!error.value) void fillViewport()
+  }
+}
+async function retry() { await loadMore(); void fillViewport() }
 const showCreateModal = ref(false)
 
 const handleCreateClick = () => {
@@ -43,6 +54,7 @@ const searchForm = ref<BlogPageQuery>({
   pageNum: 1,
   pageSize: 9,
   keyword: typeof route.query.keyword === 'string' ? route.query.keyword : '',
+  tagIds: typeof route.query.tagId === 'string' ? [route.query.tagId] : undefined,
   sortField: 'createTime',
   sortOrder: 'desc'
 })
@@ -56,36 +68,9 @@ const sortOptions = [
   { label: '最近更新', value: 'updateTime' }
 ]
 
-// 默认头像图标渲染函数
-const renderDefaultAvatar = () => h(NIcon, null, { default: () => h(Person) })
-
-const fetchBlogs = async () => {
-  loading.value = true
-  try {
-    const params: BlogPageQuery = {
-      ...searchForm.value,
-      keyword: searchForm.value.keyword?.trim() || undefined
-    }
-    
-    const res = await getPublicBlogPage(params)
-    blogList.value = res.records
-    total.value = res.total
-  } catch (error) {
-    message.error('获取博客列表失败')
-  } finally {
-    loading.value = false
-  }
-}
-
-const handleSearch = () => {
-  searchForm.value.pageNum = 1
-  fetchBlogs()
-}
-
-const handlePageChange = (page: number) => {
-  searchForm.value.pageNum = page
-  fetchBlogs()
-  window.scrollTo({ top: 0, behavior: 'smooth' })
+const handleSearch = async () => {
+  await reset({ ...searchForm.value, keyword: searchForm.value.keyword?.trim() || undefined })
+  void fillViewport()
 }
 
 const handleCreateBlog = async () => {
@@ -107,22 +92,30 @@ const handleCreateBlog = async () => {
   }
 }
 
+watch(() => route.query.create, (value) => { if(value === '1') { handleCreateClick(); const query = {...route.query}; delete query.create; router.replace({path:route.path,query}) } }, {immediate:true})
+watch(() => [route.query.keyword, route.query.tagId], () => { searchForm.value.keyword = typeof route.query.keyword === 'string' ? route.query.keyword : ''; searchForm.value.tagIds = typeof route.query.tagId === 'string' ? [route.query.tagId] : undefined; handleSearch() })
 onMounted(() => {
-  fetchBlogs()
+  observer = new IntersectionObserver(entries => { if(entries.some(entry => entry.isIntersecting)) void fillViewport() }, { rootMargin: '320px 0px' })
+  if (sentinel.value) observer.observe(sentinel.value)
+  void handleSearch()
 })
+onUnmounted(() => { active = false; observer?.disconnect(); dispose() })
 </script>
 
 <template>
   <div class="blog-list-page">
+    <div class="archive-masthead"><span>PARA BBS</span><span>文章</span></div>
     <!-- Hero Header -->
-    <div class="hero-section">
+    <div class="hero-section editorial-surface">
       <div class="hero-content">
+<div class="archive-title">
+<h1>文章</h1>
+</div>
         <div class="search-bar-wrapper">
-          <n-input 
-            v-model:value="searchForm.keyword" 
-            placeholder="Search articles..." 
+          <n-input
+            v-model:value="searchForm.keyword"
+            placeholder="搜索文章、作者或标签"
             class="hero-search-input custom-input"
-            round
             size="large"
             @keyup.enter="handleSearch"
           >
@@ -130,8 +123,8 @@ onMounted(() => {
               <n-icon :component="Search" class="search-icon" />
             </template>
           </n-input>
-          <button class="search-btn" @click="handleSearch">
-            Search
+          <button class="search-btn" aria-label="搜索" @click="handleSearch">
+            <n-icon :component="ArrowForwardOutline" />
           </button>
         </div>
       </div>
@@ -139,22 +132,16 @@ onMounted(() => {
       <div class="hero-footer">
         <div class="footer-left">
           <div class="sort-selector">
-            <n-select
-              v-model:value="searchForm.sortField"
-              :options="sortOptions"
-              size="medium"
-              class="custom-select"
-              @update:value="handleSearch"
-            />
+            <button v-for="option in sortOptions" :key="option.value" class="sort-chip" :class="{ selected: searchForm.sortField === option.value }" :aria-pressed="searchForm.sortField === option.value" @click="searchForm.sortField = option.value; handleSearch()">{{ option.label }}</button>
           </div>
         </div>
 
-        <div class="filter-tags"></div>
+        <button v-if="searchForm.tagIds?.length" class="cancel-btn" @click="router.push('/blog')">清除话题筛选</button>
 
         <div class="footer-right">
           <button class="create-btn" @click="handleCreateClick">
             <n-icon :component="Add" />
-            Write
+            写文章
           </button>
         </div>
       </div>
@@ -162,66 +149,22 @@ onMounted(() => {
 
     <!-- Content Section -->
     <div class="content-container">
-      <n-spin :show="loading">
+      <n-spin :show="loading && !blogList.length">
         <div v-if="blogList.length > 0">
           <div class="blog-grid">
-            <div 
-              v-for="(blog, index) in blogList" 
-              :key="blog.id" 
-              class="blog-card-wrapper"
-              :style="{ animationDelay: `${index * 0.1}s` }"
-              @click="router.push(`/blog/${blog.id}`)"
-            >
-              <div class="blog-card">
-                <div class="card-body">
-                  <div class="card-main-line">
-                    <h3 class="card-title">{{ blog.title }}</h3>
-                    <n-avatar
-                      round
-                      size="small"
-                      :src="resolveAvatarUrl(blog.author.avatar)"
-                      :render-icon="renderDefaultAvatar"
-                      class="author-avatar"
-                    />
-                    <span class="like-count">
-                      <n-icon :component="HeartOutline" />
-                      {{ blog.likeCount || 0 }}
-                    </span>
-                    <span class="like-count">
-                      <n-icon :component="ChatbubbleOutline" />
-                      {{ blog.commentsCount || 0 }}
-                    </span>
-                  </div>
-                  <p class="card-summary">{{ blog.summary || 'No summary available...' }}</p>
-                  <div class="card-meta-top">
-                    <div class="card-tags">
-                      <span v-if="!blog.tags?.length" class="card-tag">General</span>
-                      <span v-for="tag in blog.tags" :key="tag.id" class="card-tag">{{ tag.name }}</span>
-                    </div>
-                    <span class="publish-date">{{ DateUtils.isoToDateOnly(blog.createTime) }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div class="pagination-container">
-            <n-pagination
-              v-model:page="searchForm.pageNum"
-              :item-count="total"
-              :page-size="searchForm.pageSize"
-              size="large"
-              @update:page="handlePageChange"
-            />
-          </div>
+<div v-for="(blog, index) in blogList" :key="blog.id" class="archive-entry"><span class="archive-number" aria-hidden="true">{{ String(index + 1).padStart(2, '0') }}</span><ArticleCard :blog="blog" /></div>
+</div>
+
+
         </div>
-        
-        <n-empty v-else description="No articles found." class="empty-state">
+
+        <n-empty v-else-if="!loading && !error" description="没有找到相关文章。" class="empty-state">
            <template #icon>
              <n-icon :component="GridOutline" />
            </template>
         </n-empty>
       </n-spin>
+      <div ref="sentinel" class="load-more" role="status"><span v-if="loading">正在加载…</span><button v-else-if="error" @click="retry">加载失败，点击重试</button><button v-else-if="hasMore" @click="retry">加载更多</button><span v-else-if="blogList.length">已显示全部文章</span></div>
     </div>
 
     <!-- Create Modal -->
@@ -248,711 +191,268 @@ onMounted(() => {
 
 <style scoped>
 .blog-list-page {
-  min-height: 100vh;
-  background-color: transparent;
-  padding-bottom: 80px;
-  position: relative;
-  overflow: hidden;
-}
-
-/* Hero Section */
-.hero-section {
-  position: relative;
-  padding: 0px 20px 40px;
-  margin-bottom: 40px;
-  text-align: center;
-  z-index: 10;
+  max-width: 1040px;
+  margin: auto;
+  padding: 24px 48px 64px;
 }
 
 .hero-content {
-  max-width: 800px;
-  margin: 0 auto;
   display: flex;
   flex-direction: column;
-  animation: fadeIn 0.8s ease-out;
+  align-items: stretch;
+  gap: 22px;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
+.archive-title h1 {
+  margin: 0;
 }
 
 .search-bar-wrapper {
   display: flex;
-  gap: 0;
-  max-width: 600px;
-  margin: 0 auto 40px;
-  border-bottom: 2px solid var(--text-primary);
-  padding-bottom: 5px;
-  transition: border-color 0.3s;
-}
-
-.search-bar-wrapper:focus-within {
-  border-color: var(--accent-color);
+  gap: 12px;
+  width: 100%;
+  position: relative;
 }
 
 .hero-search-input {
-  flex: 1;
+  border-radius: 28px;
 }
 
-.custom-input :deep(.n-input__input-el) {
-  font-family: 'Lato', sans-serif;
-  font-size: 1.1rem;
-  color: var(--text-primary);
-}
-
-.custom-input :deep(.n-input__border),
-.custom-input :deep(.n-input__state-border) {
-  display: none;
-}
-
-.custom-input {
-  background: transparent;
-}
-
-.search-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-primary);
-  font-family: 'Lato', sans-serif;
-  font-weight: 700;
-  font-size: 1rem;
-  letter-spacing: 2px;
+.search-btn, .create-btn, .save-btn {
+  border: 0;
+  border-radius: 24px;
+  background: var(--accent-color);
+  color: var(--on-accent);
+  padding: 10px 20px;
+  white-space: nowrap;
   cursor: pointer;
-  padding: 0 20px;
-  text-transform: uppercase;
-  transition: color 0.3s;
-}
-
-.search-btn:hover {
-  color: var(--accent-color);
-}
-
-/* Content Container */
-.content-container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 24px;
-  position: relative;
-  z-index: 10;
 }
 
 .hero-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  width: 100%;
-  max-width: 1200px;
-  margin: -4% auto;
-  padding: 0 24px;
-  border-bottom: 1px solid var(--line-color);
-  padding-bottom: 20px;
-  animation: fadeIn 0.8s ease-out 0.2s backwards;
-}
-
-.footer-left, .footer-right {
-  display: flex;
-  align-items: center;
-}
-
-.custom-select {
-  width: 150px;
-}
-
-.custom-select :deep(.n-base-selection) {
-  background: transparent;
-  border: 1px solid var(--line-color);
-  border-radius: 0;
-}
-
-.custom-select :deep(.n-base-selection__border),
-.custom-select :deep(.n-base-selection__state-border) {
-  display: none;
-}
-
-.custom-select :deep(.n-base-selection-input) {
-  font-family: 'Lato', sans-serif;
-  color: var(--text-primary);
-}
-
-.filter-tags {
-  display: flex;
-  justify-content: center;
   gap: 20px;
-  flex: 1;
 }
 
-.filter-tag {
-  font-family: 'Lato', sans-serif;
-  font-size: 0.9rem;
-  letter-spacing: 1px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all 0.3s;
-  padding: 5px 0;
-  position: relative;
-  text-transform: uppercase;
-}
-
-.filter-tag::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 0;
-  height: 1px;
-  background-color: var(--text-primary);
-  transition: width 0.3s;
-}
-
-.filter-tag:hover {
-  color: var(--text-primary);
-}
-
-.filter-tag:hover::after,
-.filter-tag.active::after {
-  width: 100%;
-}
-
-.filter-tag.active {
-  color: var(--text-primary);
-  font-weight: 700;
+.sort-selector {
+  display: flex;
+  gap: 10px;
 }
 
 .create-btn {
-  background: var(--text-primary);
-  color: var(--bg-primary);
-  border: none;
-  padding: 10px 20px;
-  font-family: 'Lato', sans-serif;
-  font-weight: 700;
-  letter-spacing: 1px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  transition: all 0.3s;
-}
-
-.create-btn:hover {
-  background: var(--accent-color);
-  transform: translateY(-2px);
-}
-
-/* Blog Grid */
-.blog-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-  gap: 40px;
-  margin-top: 40px;
-}
-
-.blog-card-wrapper {
-  animation: slideInUp 0.6s ease-out backwards;
-}
-
-@keyframes slideInUp {
-  from { opacity: 0; transform: translateY(40px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.blog-card {
-  height: 100%;
-  background: transparent !important;
-  border: 1px solid var(--line-color);
-  display: flex;
-  flex-direction: column;
-  transition: all 0.4s ease;
-  cursor: pointer;
-  position: relative;
-}
-
-.blog-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 4px;
-  background: transparent;
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform 0.4s ease;
-}
-
-.blog-card:hover {
-  transform: translateY(-10px);
-  box-shadow: 15px 15px 0px var(--line-color);
-}
-
-.blog-card:hover::before {
-  transform: scaleX(1);
-  background: transparent;
-}
-
-.card-header {
-  padding: 20px 24px 0;
-}
-
-.card-header-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid var(--line-color);
-  padding-bottom: 15px;
-}
-
-.category-badge {
-  font-family: 'Lato', sans-serif;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: var(--text-primary);
-}
-
-.read-more-icon {
-  color: var(--text-secondary);
-  transition: all 0.3s;
-  transform: translateX(-10px);
-  opacity: 0;
-}
-
-.blog-card:hover .read-more-icon {
-  transform: translateX(0);
-  opacity: 1;
-  color: var(--accent-color);
-}
-
-.card-body {
-  padding: 20px 24px 24px;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-.card-meta-top {
-  display: flex;
-  justify-content: space-between;
-  font-family: 'Lato', sans-serif;
-  font-size: 0.8rem;
-  color: var(--text-tertiary);
-  margin-bottom: 15px;
-  letter-spacing: 1px;
-}
-
-.sub-category {
-  color: var(--accent-color);
-}
-
-.card-title {
-  font-family: 'Playfair Display', serif;
-  font-size: 1.5rem;
-  font-weight: 700;
-  margin: 0 0 15px;
-  line-height: 1.3;
-  color: var(--text-primary);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  transition: color 0.3s;
-}
-
-.blog-card:hover .card-title {
-  color: var(--accent-color);
-}
-
-.card-summary {
-  font-family: 'Lato', sans-serif;
-  font-size: 0.95rem;
-  color: var(--text-secondary);
-  line-height: 1.6;
-  margin-bottom: 24px;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  flex: 1;
-}
-
-.card-footer {
-  margin-top: auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.author-profile {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.author-avatar {
-  border: 1px solid var(--line-color);
-}
-
-.author-name {
-  font-family: 'Lato', sans-serif;
-  font-size: 0.85rem;
-  font-weight: 700;
-  letter-spacing: 1px;
-  color: var(--text-primary);
-  text-transform: uppercase;
-}
-
-.like-count {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  color: var(--text-tertiary);
-  font-family: 'Lato', sans-serif;
-  font-size: 0.82rem;
-  font-weight: 700;
-  letter-spacing: 1px;
+  gap: 8px;
+  background: var(--accent-soft);
+  color: var(--accent-color);
+}
+
+.blog-grid {
+  display: grid;
+}
+
+.blog-grid :deep(.article-card + .article-card) {
+  border-top: 1px solid transparent;
+}
+
+.blog-grid :deep(.article-card:hover) {
+  background: var(--bg-secondary);
 }
 
 .pagination-container {
-  margin-top: 60px;
   display: flex;
   justify-content: center;
-}
-
-.pagination-container :deep(.n-pagination) {
-  font-family: 'Lato', sans-serif;
-}
-
-.pagination-container :deep(.n-pagination-item) {
-  border-radius: 0;
-  border: 1px solid var(--line-color);
-  background: transparent;
-  color: var(--text-primary);
-}
-
-.pagination-container :deep(.n-pagination-item--active) {
-  background: var(--text-primary);
-  color: var(--bg-primary);
-  border-color: var(--text-primary);
+  padding-top: 28px;
 }
 
 .empty-state {
-  margin-top: 100px;
-  font-family: 'Playfair Display', serif;
+  padding: 80px 0;
 }
 
-/* Modal Styles */
 .create-modal-content {
-    background: var(--modal-bg);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    padding: 30px;
-    width: 90vw;
-    max-width: 500px;
-    border: 1px solid var(--line-color);
-    box-shadow: 0 25px 50px rgba(0,0,0,0.2);
-    border-radius: 0;
-    box-sizing: border-box;
-}
-
-.modal-header {
-    margin-bottom: 24px;
-    border-bottom: 1px solid var(--line-color);
-    padding-bottom: 15px;
+  width: min(480px,92vw);
+  background: var(--bg-primary);
+  border-radius: 24px;
+  padding: 28px;
 }
 
 .modal-header h3 {
-    font-family: 'Playfair Display', serif;
-    margin: 0;
-    font-size: 1.8rem;
-    letter-spacing: 2px;
-    color: var(--text-primary);
-}
-
-.custom-form :deep(.n-form-item-label) {
-    font-family: 'Lato', sans-serif;
-    font-size: 0.85rem;
-    letter-spacing: 1px;
-    color: var(--text-secondary);
+  font-size: 22px;
+  margin: 0 0 24px;
 }
 
 .modal-actions {
-    margin-top: 30px;
-    display: flex;
-    justify-content: flex-end;
-    gap: 15px;
-    border-top: 1px solid var(--line-color);
-    padding-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
 }
 
 .cancel-btn {
-    background: transparent;
-    border: 1px solid var(--line-color);
-    color: var(--text-primary);
-    padding: 10px 20px;
-    font-family: 'Lato', sans-serif;
-    font-weight: 700;
-    letter-spacing: 1px;
-    cursor: pointer;
-    transition: all 0.3s;
+  border: 0;
+  border-radius: 24px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  padding: 10px 20px;
+  cursor: pointer;
 }
 
-.cancel-btn:hover {
-    border-color: var(--text-primary);
-}
-
-.save-btn {
-    background: var(--text-primary);
-    color: var(--bg-primary);
-    border: none;
-    padding: 10px 25px;
-    font-family: 'Lato', sans-serif;
-    font-weight: 700;
-    letter-spacing: 1px;
-    cursor: pointer;
-    transition: all 0.3s;
-}
-
-.save-btn:hover {
-    background: var(--accent-color);
-    transform: translateY(-2px);
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  .hero-title {
-    font-size: 3rem;
+@media (max-width:640px) {
+  .blog-list-page {
+    padding: 20px 18px 48px;
+  }
+  .hero-content {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 22px;
+  }
+  .search-bar-wrapper {
+    width: 100%;
   }
   .hero-footer {
-    flex-direction: row;
-    align-items: center;
-    gap: 10px;
-    margin: 0 auto;
-    padding-bottom: 14px;
-  }
-  .footer-left {
-    flex: 1 1 auto;
-    min-width: 0;
-  }
-  .footer-right {
-    flex: 0 0 auto;
-  }
-  .sort-selector,
-  .custom-select {
-    width: 100%;
-    min-width: 0;
-  }
-  .filter-tags {
-    display: none;
-  }
-  .create-btn {
-    padding-inline: 14px;
-    white-space: nowrap;
-  }
-  .blog-grid {
-    grid-template-columns: 1fr;
+    gap: 12px;
+    flex-wrap: wrap;
   }
 }
 
-.hero-title {
-  margin: 0 0 1.3rem;
-  font-family: 'Agbalumo', 'ZCOOL KuaiLe', sans-serif;
-  font-size: clamp(2.8rem, 7vw, 5.8rem);
-  letter-spacing: -0.04em;
-  line-height: 1;
+.load-more {
+  display: flex;
+  justify-content: center;
+  padding: 28px;
+  color: var(--text-tertiary);
+  font-size: 13px;
 }
 
-.highlight {
+.load-more button {
+  padding: 10px 20px;
+  border: 0;
+  border-radius: 20px;
   color: var(--accent-color);
-}
-
-.search-bar-wrapper {
-  width: min(100%, 650px);
-  border: 1px solid var(--line-color);
-  border-radius: 999px;
   background: var(--bg-secondary);
-  box-shadow: none;
+  cursor: pointer;
 }
 
-.custom-input :deep(.n-input__input-el) {
-  font-family: 'Agbalumo', 'ZCOOL KuaiLe', sans-serif;
+.hero-search-input :deep(.n-input-wrapper) {
+  padding-right: 62px;
 }
 
-.search-bar-wrapper:focus-within {
-  border-color: var(--line-color);
-  box-shadow: none;
+.hero-search-input {
+  --n-color: var(--bg-secondary) !important;
+  --n-height: 54px !important;
 }
 
-.hero-search-input :deep(.n-input),
-.hero-search-input :deep(.n-input--focus),
-.hero-search-input :deep(.n-input-wrapper),
-.hero-search-input :deep(.n-input__border),
-.hero-search-input :deep(.n-input__state-border),
-.hero-search-input :deep(.n-input__input-el:focus) {
-  border-color: transparent !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  outline: none !important;
+.search-btn {
+  position: absolute;
+  right: 7px;
+  top: 7px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  font-size: 22px;
 }
 
-.custom-select :deep(.n-base-selection) {
-  border-radius: 999px;
+.sort-chip {
+  border: 0;
+  border-radius: 22px;
+  padding: 9px 17px;
   background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.sort-chip.selected {
+  color: var(--accent-color);
+  background: var(--accent-soft);
+}
+
+.archive-masthead {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0 16px;
+  border-bottom: 1px solid var(--text-primary);
+  font-size: 11px;
+  letter-spacing: .2em;
+  color: var(--text-secondary);
+}
+
+.archive-masthead span:first-child {
+  color: var(--accent-color);
+  font-weight: 650;
+}
+
+.hero-section {
+  margin-top: 12px;
+  padding: 36px 32px 24px;
+  border-radius: 4px 4px 36px 4px;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent-color) 22%, var(--line-color));
+}
+
+.archive-title h1 {
+  font-family: var(--font-sans);
+  font-size: 42px;
+  font-weight: 500;
+  letter-spacing: .08em;
+}
+
+.hero-footer {
+  margin: 22px 0 0;
 }
 
 .blog-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 0.7rem;
-  margin-top: 1.25rem;
+  margin-top: 28px;
+  gap: 0;
 }
 
-.blog-card-wrapper {
-  width: 100%;
-}
-
-.blog-card {
-  min-height: 0;
-  border: 1px solid var(--line-color);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--bg-primary) 90%, var(--accent-color) 10%);
-  box-shadow: none;
-}
-
-.blog-card::before {
-  display: none;
-}
-
-.blog-card:hover {
-  transform: none;
-  border-color: color-mix(in srgb, var(--accent-color) 45%, var(--line-color));
-  box-shadow: none;
-}
-
-.card-body {
+.archive-entry {
   display: grid;
-  gap: 0.45rem;
-  padding: 0.9rem 1.1rem 0.95rem;
+  grid-template-columns: 60px minmax(0, 1fr);
+  gap: 20px;
+  padding: 30px 0;
+  border-bottom: 1px solid var(--line-color);
 }
 
-.card-main-line {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
-  align-items: center;
-  gap: 0.7rem;
-  min-width: 0;
-}
-
-.card-title {
-  min-width: 0;
-  margin: 0;
-  overflow: hidden;
-  font-size: clamp(1.1rem, 2vw, 1.45rem);
-  line-height: 1.25;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.author-avatar {
-  border: 0;
-}
-
-.like-count {
-  white-space: nowrap;
-}
-
-.card-summary {
-  display: block;
-  min-width: 0;
-  margin: 0;
-  overflow: hidden;
-  line-height: 1.45;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.card-meta-top {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.75rem;
-  min-width: 0;
-  margin: 0;
-}
-
-.card-tags {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-}
-
-.card-tag {
-  flex: 0 0 auto;
-  overflow: hidden;
+.archive-number {
   color: var(--accent-color);
-  font-size: 0.76rem;
-  text-overflow: ellipsis;
+  font-family: var(--font-sans);
+  font-size: 36px;
+  font-style: italic;
+  line-height: 1.1;
+  opacity: .7;
 }
 
-.card-tag + .card-tag::before {
-  margin-right: 0.45rem;
-  color: var(--line-color);
-  content: '/';
+.archive-entry :deep(.article-card), .blog-grid :deep(.article-card:hover) {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  border-radius: 0;
 }
 
-.publish-date {
-  color: var(--text-tertiary);
-  font-size: 0.76rem;
-  white-space: nowrap;
+.archive-entry :deep(h2) {
+  font-family: var(--font-sans);
+  font-size: 24px;
+  font-weight: 500;
 }
 
-.category-badge,
-.author-name,
-.card-title,
-.card-meta-top,
-.card-summary,
-.like-count,
-.custom-form :deep(.n-form-item-label),
-.cancel-btn,
-.save-btn {
-  font-family: 'Agbalumo', 'ZCOOL KuaiLe', sans-serif;
-  text-transform: none;
-  letter-spacing: 0.02em;
-}
-
-.pagination-container {
-  margin-top: 2rem;
-}
-
-.create-modal-content {
-  border-radius: 24px;
-  background: var(--modal-bg);
-}
-
-.modal-header h3 {
-  font-family: 'Agbalumo', 'ZCOOL KuaiLe', sans-serif;
-}
-
-@media (max-width: 768px) {
+@media (max-width:640px) {
   .hero-section {
-    padding-top: 1rem;
+    padding: 28px 20px 22px;
   }
-
-  .hero-footer {
-    align-items: center;
+  .archive-title h1 {
+    font-size: 34px;
   }
-
-  .footer-left,
-  .footer-right {
-    justify-content: stretch;
+  .archive-entry {
+    grid-template-columns: 36px minmax(0, 1fr);
+    gap: 12px;
+    padding: 24px 0;
   }
-
-  .create-btn {
-    justify-content: center;
+  .archive-number {
+    font-size: 28px;
+  }
+  .archive-entry :deep(h2) {
+    font-size: 21px;
   }
 }
 </style>

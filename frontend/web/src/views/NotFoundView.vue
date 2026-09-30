@@ -33,6 +33,7 @@ const { isDark } = storeToRefs(themeStore)
 </template>
 
 <style scoped>
+
 .not-found-page {
   height: 80vh;
   display: flex;
@@ -44,7 +45,7 @@ const { isDark } = storeToRefs(themeStore)
 
 .content {
   padding: 40px;
-  border-radius: 24px;
+  border-radius: 2px;
   background: rgba(255, 255, 255, 0.5);
   z-index: 10;
 }
@@ -91,4 +92,5 @@ const { isDark } = storeToRefs(themeStore)
   0%, 100% { transform: translate(0, 0); }
   50% { transform: translate(30px, -30px); }
 }
+
 </style>

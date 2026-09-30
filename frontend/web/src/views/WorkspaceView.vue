@@ -814,20 +814,22 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+
+
 .workspace-page {
   min-height: 100vh;
   background: var(--bg-primary);
   color: var(--text-primary);
-  padding: 36px 20px 80px;
+  padding: 24px 28px 64px;
 }
 
 .workspace-shell {
   width: min(1440px, 100%);
   margin: 0 auto;
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
-  gap: 28px;
   align-items: start;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 24px;
 }
 
 .folder-pane,
@@ -843,6 +845,9 @@ onMounted(async () => {
   padding: 24px;
   max-height: calc(100vh - 120px);
   overflow: auto;
+  border-radius: 20px;
+  background: var(--bg-secondary);
+  border: 0;
 }
 
 .pane-header,
@@ -856,19 +861,19 @@ onMounted(async () => {
 
 .eyebrow {
   color: var(--accent-color);
-  font-family: 'Lato', sans-serif;
+  font-family: var(--font-sans);
   font-size: 0.72rem;
   font-weight: 700;
-  letter-spacing: 3px;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
 .pane-header h1 {
   margin: 4px 0 0;
-  font-family: 'Playfair Display', serif;
-  font-size: 2.2rem;
-  font-weight: 400;
+  font-family: var(--font-body);
   color: var(--text-primary);
+  font-size: 26px;
+  font-weight: 600;
 }
 
 .workspace-module-nav {
@@ -890,6 +895,7 @@ onMounted(async () => {
   text-align: left;
   cursor: pointer;
   transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+  border-radius: 18px;
 }
 
 .workspace-module:hover,
@@ -952,7 +958,7 @@ onMounted(async () => {
   color: var(--text-tertiary);
   font-size: 0.72rem;
   font-weight: 700;
-  letter-spacing: 2px;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
@@ -965,6 +971,7 @@ onMounted(async () => {
 
 .content-pane section {
   padding: 24px;
+  border-radius: 20px;
 }
 
 .content-header {
@@ -991,7 +998,7 @@ onMounted(async () => {
 .agent-heading h2 {
   margin: 0;
   color: var(--text-primary);
-  font-family: 'Playfair Display', serif;
+  font-family: var(--font-body);
   font-size: 1.5rem;
 }
 
@@ -1077,7 +1084,7 @@ onMounted(async () => {
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
-  font-family: 'Lato', sans-serif;
+  font-family: var(--font-sans);
   font-weight: 700;
 }
 
@@ -1090,7 +1097,7 @@ onMounted(async () => {
   align-items: baseline;
   gap: 10px;
   margin-bottom: 0;
-  font-family: 'Playfair Display', serif;
+  font-family: var(--font-body);
   font-size: 1.45rem;
   color: var(--text-primary);
 }
@@ -1137,12 +1144,13 @@ onMounted(async () => {
   padding: 18px;
   cursor: pointer;
   transition: all 0.25s ease;
+  border-radius: 16px;
 }
 
 .folder-card:hover {
   border-color: var(--accent-color);
   transform: translateY(-4px);
-  box-shadow: 10px 10px 0 var(--line-color);
+  box-shadow: none;
 }
 
 .folder-main {
@@ -1159,7 +1167,7 @@ onMounted(async () => {
 .folder-card h3 {
   margin: 0;
   color: var(--text-primary);
-  font-family: 'Playfair Display', serif;
+  font-family: var(--font-body);
   font-size: 1.2rem;
 }
 
@@ -1194,7 +1202,7 @@ onMounted(async () => {
   border-bottom: 1px solid var(--line-color);
   font-size: 0.72rem;
   font-weight: 700;
-  letter-spacing: 2px;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
@@ -1242,7 +1250,7 @@ onMounted(async () => {
   margin: 0;
   overflow: hidden;
   color: var(--text-primary);
-  font-family: 'Playfair Display', serif;
+  font-family: var(--font-body);
   font-size: 1.05rem;
   font-weight: 600;
   text-overflow: ellipsis;
@@ -1318,12 +1326,13 @@ onMounted(async () => {
 .workspace-modal {
   width: min(92vw, 460px);
   padding: 26px;
-  box-shadow: 0 24px 54px rgba(0, 0, 0, 0.18);
+  box-shadow: none;
+  border-radius: 24px;
 }
 
 .workspace-modal h2 {
   margin: 0 0 22px;
-  font-family: 'Playfair Display', serif;
+  font-family: var(--font-body);
   font-size: 1.55rem;
   color: var(--text-primary);
 }
@@ -1371,4 +1380,5 @@ onMounted(async () => {
   }
 
 }
+
 </style>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { VrindEditor } from '@nobeta/vrind'
+import VditorEditor from '@/components/editor/VditorEditor.vue'
 import {
   NButton,
   NEmpty,
@@ -96,9 +96,6 @@ const form = reactive({
   isPublished: 0 as PublishStatus,
   tagIds: [] as string[],
 })
-
-const assetBaseUrl = import.meta.env.BASE_URL.replace(/\/+$/, '')
-const editorCounter = Object.freeze({ enable: true, type: 'markdown' as const })
 
 const saveStateText = computed(() => {
   if (saving.value) {
@@ -543,18 +540,15 @@ onUnmounted(() => {
           <main class="editor-card">
             <div
               ref="editorRef"
-              class="vrind-edit-container"
+              class="editor-container"
               :class="{ 'mobile-toolbar-expanded': mobileToolbarExpanded }"
             >
-              <VrindEditor
+              <VditorEditor
                 v-model="form.content"
                 :is-dark="isDark"
-                :asset-base-url="assetBaseUrl"
-                :counter="editorCounter"
-                toolbar-fixed
-                :toolbar-offset="78"
                 :upload-image="handleEditorUpload"
-              />
+              >
+                <template #toolbar-extra>
               <button
                 class="mobile-toolbar-toggle"
                 type="button"
@@ -565,6 +559,8 @@ onUnmounted(() => {
                 <n-icon :component="EllipsisHorizontalOutline" />
                 <span>{{ mobileToolbarExpanded ? '收起' : '更多' }}</span>
               </button>
+                </template>
+              </VditorEditor>
             </div>
 
           </main>
@@ -587,11 +583,13 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+
+
 .private-detail-page {
   min-height: 100vh;
   background: var(--bg-primary);
   color: var(--text-primary);
-  padding: 28px 20px 96px;
+  padding: 24px 28px 72px;
 }
 
 .editor-shell {
@@ -617,8 +615,8 @@ onUnmounted(() => {
   cursor: pointer;
   font-family: inherit;
   font-weight: 700;
-  letter-spacing: 1px;
-  text-transform: uppercase;
+  text-transform: none;
+  letter-spacing: 0.02em;
 }
 
 .text-link:hover {
@@ -642,10 +640,11 @@ onUnmounted(() => {
   color: var(--text-secondary);
   font-family: inherit;
   font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 1px;
   text-transform: uppercase;
   white-space: nowrap;
+  border-radius: 24px;
+  letter-spacing: 0;
+  font-weight: 400;
 }
 
 .autosave-state {
@@ -660,6 +659,9 @@ onUnmounted(() => {
 
 .meta-panel {
   padding: 20px;
+  background: var(--bg-secondary);
+  border: 0;
+  border-radius: 20px;
 }
 
 .meta-form {
@@ -671,10 +673,10 @@ onUnmounted(() => {
 .meta-form :deep(.n-form-item-label) {
   font-family: inherit;
   color: var(--text-tertiary);
-  font-size: 0.74rem;
-  font-weight: 700;
-  letter-spacing: 2px;
   text-transform: uppercase;
+  letter-spacing: 0;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .custom-input,
@@ -694,9 +696,9 @@ onUnmounted(() => {
 
 .workbench {
   display: grid;
-  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
-  gap: 22px;
   align-items: start;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 24px;
 }
 
 .metadata-column {
@@ -707,25 +709,29 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 18px;
+  font-family: inherit;
 }
 
 .editor-card {
-  min-width: 0;
   position: relative;
   padding: 0;
+  min-width: 0;
+  overflow: visible;
   border: 0;
   background: transparent;
   box-shadow: none;
 }
 
-.vrind-edit-container {
+.editor-container {
   min-height: 720px;
   position: relative;
   border: 1px solid var(--line-color);
+  border-radius: 18px;
 }
 
 .mobile-toolbar-toggle {
   display: none;
+  border-radius: 18px;
 }
 
 .back-top-button {
@@ -742,9 +748,9 @@ onUnmounted(() => {
   background: var(--modal-bg);
   color: var(--text-primary);
   cursor: pointer;
-  backdrop-filter: blur(14px);
-  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.16);
+  box-shadow: none;
   transition: transform 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  border-radius: 50%;
 }
 
 .back-top-button:hover {
@@ -762,7 +768,7 @@ onUnmounted(() => {
   justify-content: center;
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 1200px) {
   .meta-form,
   .workbench {
     grid-template-columns: 1fr;
@@ -790,25 +796,19 @@ onUnmounted(() => {
   }
 }
 
-.private-detail-page {
-  padding: 2rem 20px calc(6rem + 48px);
-}
-
-.text-link {
-  text-transform: none;
-  letter-spacing: 0.02em;
-}
-
 .meta-panel,
 .toc-panel {
   border-color: var(--line-color);
-  border-radius: 22px;
+  border-radius: 2px;
   background: var(--bg-primary);
-  box-shadow: 0 16px 34px color-mix(in srgb, var(--text-primary) 6%, transparent);
+  box-shadow: none;
 }
 
 .toc-panel {
   padding: 18px;
+  background: var(--bg-secondary);
+  border: 0;
+  border-radius: 20px;
 }
 
 .toc-title {
@@ -816,11 +816,13 @@ onUnmounted(() => {
   margin-bottom: 14px;
   border-bottom: 1px solid var(--line-color);
   color: var(--text-primary);
-  font-size: 1.1rem;
-  font-weight: 800;
+  font-size: 15px;
+  font-weight: 600;
 }
 
 .toc-list {
+  max-height: 320px;
+  overflow: auto;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -863,97 +865,23 @@ onUnmounted(() => {
 .toc-level-5 { padding-left: 56px; }
 .toc-level-6 { padding-left: 70px; }
 
-.editor-card {
-  min-width: 0;
-  overflow: visible;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.metadata-column {
-  font-family: inherit;
-}
-
-.editor-card :deep(.md-editor__footer) {
-  display: none;
-}
-
-.editor-card :deep(.md-editor),
-.editor-card :deep(.md-editor__container),
-.editor-card :deep(.vditor),
-.editor-card :deep(.vditor-content),
-.editor-card :deep(.vditor-preview),
-.editor-card :deep(.vditor-preview__content),
-.editor-card :deep(.vditor-wysiwyg),
-.editor-card :deep(.vditor-ir),
-.editor-card :deep(.vditor-sv),
-.editor-card :deep(.vditor-reset) {
-  background-color: transparent;
-}
-
-.editor-card :deep(.md-editor),
-.editor-card :deep(.md-editor__container),
 .editor-card :deep(.vditor) {
   overflow: visible !important;
-}
-
-.editor-card :deep(.vditor) {
-  --panel-background-color: transparent;
-  --toolbar-background-color: transparent;
-  --textarea-background-color: transparent;
-  --textarea-text-color: var(--text-primary);
-  --count-background-color: transparent;
-  --border-color: var(--line-color);
-  --second-color: var(--text-tertiary);
-  --toolbar-icon-color: var(--text-secondary);
-  --toolbar-icon-hover-color: var(--accent-color);
-  --blockquote-color: var(--text-secondary);
-  --ir-heading-color: var(--accent-color);
-  --ir-link-color: var(--accent-color);
-  --ir-bracket-color: var(--accent-color);
-  border-color: var(--line-color);
-  font-family: inherit;
-}
-
-.editor-card :deep(.md-editor),
-.editor-card :deep(.md-editor *),
-.editor-card :deep(.vditor-preview),
-.editor-card :deep(.vditor-preview *),
-.editor-card :deep(.vditor-reset),
-.editor-card :deep(.vditor-reset *) {
-  font-family: var(--site-font-family);
 }
 
 .editor-card :deep(.vditor-toolbar) {
   z-index: 20 !important;
   box-sizing: border-box;
-  border-bottom: 1px solid var(--line-color);
   border-left: 0;
-  background: var(--modal-bg);
-  box-shadow: 0 10px 24px color-mix(in srgb, var(--text-primary) 8%, transparent);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  box-shadow: none;
 }
 
 .editor-card :deep(.vditor-content),
 .editor-card :deep(.vditor-wysiwyg),
 .editor-card :deep(.vditor-ir),
 .editor-card :deep(.vditor-sv) {
-  min-height: var(--vrind-editor-min-height, 720px);
+  min-height: 720px;
   overflow: visible;
-}
-
-.editor-card :deep(.vditor *),
-.editor-card :deep(.vditor-toolbar),
-.editor-card :deep(.vditor-counter) {
-  font-family: var(--site-font-family);
-}
-
-.editor-card :deep(.vditor-counter) {
-  border: 1px solid var(--line-color);
-  color: var(--text-secondary);
-  background: transparent;
 }
 
 @media (max-width: 720px) {
@@ -969,7 +897,8 @@ onUnmounted(() => {
     display: flex;
     flex-wrap: wrap;
     align-content: flex-start;
-    overflow: hidden;
+    overflow: visible;
+    padding-right: 64px;
   }
 
   .editor-card :deep(.vditor-toolbar > *) {
@@ -980,16 +909,16 @@ onUnmounted(() => {
     padding: 0 3px;
   }
 
-  .editor-card :deep(.vditor-toolbar > :nth-child(n + 9)) {
+  .editor-card :deep(.vditor-toolbar > :nth-child(n + 9):not(.mobile-toolbar-toggle)) {
     display: none;
   }
 
   .mobile-toolbar-expanded :deep(.vditor-toolbar) {
-    max-height: 132px;
-    overflow-y: auto;
+    max-height: none;
+    overflow: visible;
   }
 
-  .mobile-toolbar-expanded :deep(.vditor-toolbar > :nth-child(n + 9)) {
+  .mobile-toolbar-expanded :deep(.vditor-toolbar > :nth-child(n + 9):not(.mobile-toolbar-toggle)) {
     display: block;
   }
 
@@ -1004,7 +933,7 @@ onUnmounted(() => {
     min-height: 30px;
     padding: 0 8px;
     border: 1px solid var(--line-color);
-    border-radius: 6px;
+    border-radius: 2px;
     background: var(--bg-secondary);
     color: var(--text-secondary);
     cursor: pointer;
@@ -1017,4 +946,9 @@ onUnmounted(() => {
     transform: translateY(1px);
   }
 }
+/* Fullscreen owns its scroll area; page-level overflow rules must not override it. */
+.editor-card :deep(.vditor--fullscreen) { overflow: auto !important; }
+.editor-card :deep(.vditor--fullscreen .vditor-content) { min-height: 0; overflow: auto; }
+@media (min-width: 721px) and (max-width: 1200px) { .meta-form { grid-template-columns: 1fr 1fr; } }
+
 </style>
