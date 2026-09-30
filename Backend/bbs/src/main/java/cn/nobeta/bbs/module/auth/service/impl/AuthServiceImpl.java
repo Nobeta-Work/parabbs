@@ -24,6 +24,7 @@ import cn.nobeta.bbs.module.auth.dto.RegisterDTO;
 import cn.nobeta.bbs.module.auth.service.AuthService;
 import cn.nobeta.bbs.module.auth.vo.TokenVO;
 import cn.nobeta.bbs.module.user.entity.User;
+import cn.nobeta.bbs.module.user.entity.UserProfile;
 import cn.nobeta.bbs.module.user.mapper.UserMapper;
 import cn.nobeta.bbs.security.util.TokenProvider;
 
@@ -95,16 +96,13 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public void register(RegisterDTO registerDTO) {
         // 1. 加密密码
-        registerDTO.setPassword(passwordEncoder.encode(registerDTO.getPassword()));
+        String passwordHash = passwordEncoder.encode(registerDTO.getPassword());
 
         // 2. 注册用户
         // 2.1 新建用户认证信息
         User user = User.builder()
                 .username(registerDTO.getUsername())
-                .password(registerDTO.getPassword())
-                .nickname(registerDTO.getNickname())
-                .sex(registerDTO.getSex())
-                .race(registerDTO.getRace())
+                .password(passwordHash)
                 .status(1)
                 .build();
         
@@ -112,6 +110,18 @@ public class AuthServiceImpl implements AuthService {
             authMapper.insertUser(user);
         } catch (DuplicateKeyException e) {
             throw new BusinessException(ResultCode.USERNAME_DUPLICATE);
+        }
+
+        try {
+            userMapper.insertUserProfile(UserProfile.builder()
+                .userId(user.getId())
+                .nickname(registerDTO.getNickname())
+                .sex(registerDTO.getSex())
+                .race(registerDTO.getRace())
+                .signature("")
+                .build());
+        } catch (DuplicateKeyException e) {
+            throw new BusinessException(ResultCode.NICKNAME_DUPLICATE);
         }
 
         // 2.2 创建默认角色配置

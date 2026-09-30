@@ -108,6 +108,7 @@ public class BlogSearchService {
                     .id(document.getId())
                     .title(document.getTitle())
                     .summary(document.getSummary())
+                    .coverUrl(document.getCoverUrl())
                     .isPublished(1)
                     .likeCount(document.getLikeCount())
                     .commentsCount(document.getCommentsCount())

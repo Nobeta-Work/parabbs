@@ -1,6 +1,6 @@
 package cn.nobeta.bbs.handler;
 
-import org.springframework.messaging.handler.annotation.support.MethodArgumentNotValidException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -31,8 +31,14 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public Result<Void> handleValidateException(MethodArgumentNotValidException ex) {
-        log.info("参数异常：{}", ex.getMessage());
-        return Result.fail(ResultCode.ILLEGAL_ARGUMENT, ex.getMessage());
+        return Result.fail(ResultCode.ILLEGAL_ARGUMENT, "请求参数校验失败");
+    }
+
+    @ExceptionHandler({org.springframework.http.converter.HttpMessageNotReadableException.class,
+        org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class,
+        org.springframework.web.bind.MissingServletRequestParameterException.class})
+    public Result<Void> handleMalformedRequest(Exception ex) {
+        return Result.fail(ResultCode.ILLEGAL_ARGUMENT, "请求字段缺失或格式错误");
     }
 
     /**

@@ -19,6 +19,7 @@ public abstract class BlogBaseVO {
     private Long id;
     private String title;
     private String summary;
+    private String coverUrl;
     private Integer isPublished;
     private Integer likeCount;
     private Integer commentsCount;

@@ -4,9 +4,11 @@ para:
     access-token-expire: 86400000
     refresh-token-expire: 86400000
   file:
-    avatar:
+    managed:
       root-path: /data/parabbs/avatar/
-      max-size: 10485760
+      public-base-url: https://nobeta.cn/bbs/i/avatar/
+      avatar-max-size: 10485760
+      max-size: 15728640
       expire: 2
     image:
       max-size: 15728640

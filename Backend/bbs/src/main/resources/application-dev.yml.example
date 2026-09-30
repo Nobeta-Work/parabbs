@@ -4,9 +4,11 @@ para:
     access-token-expire: 864000000 # 10天
     refresh-token-expire: 864000000 # 10天
   file:
-    avatar:
+    managed:
       root-path: D:/Education/Project/Para BBS/Backend/resources/data/
-      max-size: 10485760  # 最大上传10MB
+      public-base-url: http://localhost:8080/bbs/i/avatar/
+      avatar-max-size: 10485760
+      max-size: 15728640  # 背景与封面最大上传15MB
       expire: 2  # 过期时间2h
     image:
       max-size: 15728640  # 最大上传15MB

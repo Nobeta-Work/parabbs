@@ -18,6 +18,7 @@ import cn.nobeta.bbs.module.admin.dto.UserRoleBrief;
 import cn.nobeta.bbs.module.admin.entity.SysPerm;
 import cn.nobeta.bbs.module.admin.entity.SysRole;
 import cn.nobeta.bbs.module.admin.vo.AdminBlogVO;
+import cn.nobeta.bbs.module.admin.vo.AdminUserVO;
 import cn.nobeta.bbs.module.admin.vo.AdminTagVO;
 import cn.nobeta.bbs.module.blog.entity.Blog;
 import cn.nobeta.bbs.module.tag.entity.Tag;
@@ -100,7 +101,7 @@ public interface AdminMapper {
     /**
      * 分页查询用户
      */
-    Page<User> selectAdminUserPage(AdminUserPageQuery query);
+    Page<AdminUserVO> selectAdminUserPage(AdminUserPageQuery query);
 
     /**
      * 根据 id 查询用户

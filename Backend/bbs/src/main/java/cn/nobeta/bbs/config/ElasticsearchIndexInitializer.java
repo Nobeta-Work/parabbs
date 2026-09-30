@@ -27,8 +27,13 @@ public class ElasticsearchIndexInitializer
         IndexOperations index = 
             operations.indexOps(BlogSearchDocument.class);
 
-        if (index.exists() || !index.createWithMapping()) {
-            return;
+        if (index.exists()) {
+            // 为既有索引补充非检索字段，并回填历史公开文章。
+            if (!index.putMapping(index.createMapping())) {
+                throw new IllegalStateException("博客搜索索引映射更新失败");
+            }
+        } else if (!index.createWithMapping()) {
+            throw new IllegalStateException("博客搜索索引创建失败");
         }
 
         for (Long blogId : blogMapper.selectPublishedBlogIds()) {

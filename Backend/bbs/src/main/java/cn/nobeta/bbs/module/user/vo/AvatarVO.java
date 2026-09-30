@@ -7,6 +7,6 @@ import lombok.Data;
 @Builder
 public class AvatarVO {
 
-    private String avatarKey;
+    private String avatarUrl;
 
 }

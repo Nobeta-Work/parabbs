@@ -1,5 +1,5 @@
 /**
- * version: v0.5.0
+ * version: v0.5.1
  * 完整数据库sql脚本，与迁移无关
  */
 
@@ -12,19 +12,29 @@ USE `para_bbs`;
 CREATE TABLE `sys_user` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '用户主键',
     `username` VARCHAR(64) NOT NULL COMMENT '登录账号',
-    `password` VARCHAR(255) NOT NULL COMMENT '加密密码',
+    `password` VARCHAR(255) NOT NULL COMMENT '密码哈希',
+    `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态 0:封禁,1:正常',
+    `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '账号创建时间',
+    `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '认证信息更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_username` (`username`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户认证表';
+
+CREATE TABLE `user_profile` (
+    `user_id` BIGINT NOT NULL COMMENT '用户主键，与认证表共享ID',
     `nickname` VARCHAR(50) NOT NULL COMMENT '用户昵称',
-    `avatar` VARCHAR(512) DEFAULT NULL COMMENT '头像相对路径',
+    `avatar_url` VARCHAR(2048) COLLATE utf8mb4_bin DEFAULT NULL COMMENT '完整头像URL',
     `sex` TINYINT NOT NULL DEFAULT 2 COMMENT '性别 0:女,1:男,2:未设置',
     `race` VARCHAR(50) NOT NULL DEFAULT '' COMMENT '种族',
     `signature` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '个性签名',
-    `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态 0:封禁,1:正常',
-    `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_username` (`username`),
-    UNIQUE KEY `uk_nickname` (`nickname`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='系统用户表';
+    `background_image_url` VARCHAR(2048) COLLATE utf8mb4_bin DEFAULT NULL COMMENT '完整资料背景图URL',
+    `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '资料创建时间',
+    `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '资料更新时间',
+    PRIMARY KEY (`user_id`),
+    UNIQUE KEY `uk_nickname` (`nickname`),
+    CONSTRAINT `fk_user_profile_user` FOREIGN KEY (`user_id`) REFERENCES `sys_user` (`id`),
+    CONSTRAINT `ck_user_profile_sex` CHECK (`sex` IN (0, 1, 2))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户公开资料表';
 
 CREATE TABLE `sys_role` (
     `id` BIGINT NOT NULL COMMENT '角色主键',
@@ -91,6 +101,7 @@ CREATE TABLE `blog` (
     `is_published` TINYINT NOT NULL DEFAULT 0 COMMENT '是否公开',
     `title` VARCHAR(255) NOT NULL COMMENT '标题',
     `summary` VARCHAR(500) NOT NULL DEFAULT '' COMMENT '摘要',
+    `cover_url` VARCHAR(2048) COLLATE utf8mb4_bin DEFAULT NULL COMMENT '完整博客封面URL',
     `content` MEDIUMTEXT NOT NULL COMMENT '正文',
     `like_count` INT NOT NULL DEFAULT 0 COMMENT '点赞数',
     `comments_count` INT NOT NULL DEFAULT 0 COMMENT '评论数',
@@ -181,17 +192,20 @@ CREATE TABLE `like_comment` (
     KEY `idx_user_id` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='评论点赞记录表';
 
-CREATE TABLE `avatar_info` (
-    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
-    `file_uuid` VARCHAR(255) NOT NULL COMMENT '存储文件唯一标识',
-    `is_referenced` TINYINT NOT NULL DEFAULT 0 COMMENT '是否已关联用户',
-    `user_id` BIGINT DEFAULT NULL COMMENT '关联用户主键',
-    `expire_time` DATETIME DEFAULT NULL COMMENT '未关联文件过期时间',
+CREATE TABLE `image_file` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '文件主键',
+    `storage_key` VARCHAR(255) COLLATE utf8mb4_bin NOT NULL COMMENT '相对配置存储目录的文件键',
+    `public_url` VARCHAR(2048) COLLATE utf8mb4_bin NOT NULL COMMENT '完整公开URL',
+    `user_id` BIGINT DEFAULT NULL COMMENT '上传者，历史无主记录可空',
+    `purpose` VARCHAR(16) NOT NULL COMMENT 'AVATAR/BACKGROUND/COVER',
+    `expire_time` DATETIME NOT NULL COMMENT '到期后仅清理无有效引用的文件',
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_file_uuid` (`file_uuid`),
+    UNIQUE KEY `uk_storage_key` (`storage_key`),
+    KEY `idx_public_url` (`public_url`(191)),
     KEY `idx_expire_time` (`expire_time`),
-    KEY `idx_user_id` (`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='头像文件生命周期表';
+    KEY `idx_user_id` (`user_id`),
+    CONSTRAINT `ck_image_purpose` CHECK (`purpose` IN ('AVATAR', 'BACKGROUND', 'COVER'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='头像、背景与封面文件生命周期';
 
 CREATE TABLE `agent_token` (
     `token` BIGINT NOT NULL COMMENT '主键、业务键',

@@ -3,6 +3,7 @@ package cn.nobeta.bbs.module.auth.dto;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
@@ -29,10 +30,12 @@ public class RegisterDTO {
     @Size(min = 1, max = 10, message = "昵称长度需在 1-10 之间")
     private String nickname;
 
+    @NotNull
     @Min(value = 0, message = "性别信息异常")
     @Max(value = 2, message = "性别信息异常")
     private Integer sex = NameConstant.DEFAULT_SEX;
 
+    @NotNull
     @Size(min = 1, max = 10, message = "种族长度需在 1-10 之间")
     private String race = NameConstant.DEFAULT_RACE;
 }

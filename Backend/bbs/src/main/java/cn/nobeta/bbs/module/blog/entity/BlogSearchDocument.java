@@ -47,6 +47,9 @@ public class BlogSearchDocument {
     )
     private String summary;
 
+    @Field(type = FieldType.Keyword, index = false, docValues = false)
+    private String coverUrl;
+
     @Field(
         type = FieldType.Text,
         analyzer = "smartcn",

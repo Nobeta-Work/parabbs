@@ -60,6 +60,8 @@ public interface BlogMapper {
 
     List<Long> selectPublishedBlogIds();
 
+    List<Long> selectPublishedBlogIdsByAuthor(@Param("authorId") Long authorId);
+
     /**
      * 重置博客目录到根目录
      * @param userId

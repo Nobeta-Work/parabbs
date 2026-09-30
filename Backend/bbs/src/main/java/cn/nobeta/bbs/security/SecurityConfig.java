@@ -85,6 +85,7 @@ public class SecurityConfig {
                 ).authenticated()
                 // 7. 文件接口
                 .requestMatchers(
+                    "/api/images",
                     "/api/uploadAvatar",
                     "/api/uploadImage"
                 ).authenticated()

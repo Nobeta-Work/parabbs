@@ -1,42 +1,12 @@
 package cn.nobeta.bbs.module.file.service;
 
-import java.io.IOException;
-
 import org.springframework.web.multipart.MultipartFile;
-
+import cn.nobeta.bbs.module.file.entity.ImagePurpose;
 
 public interface FileService {
-
-    /**
-     * 上传头像文件
-     * @param file
-     * @return
-     */
-    String uploadAvatar(MultipartFile file);
-
-    /**
-     * 2026-4-18
-     * v0.2.1 版本迭代，图床实现，删除下载接口
-     */
-    // /**
-    //  * 下载头像文件
-    //  * @param fileUuid
-    //  * @param response
-    //  */
-    // void downloadAvatar(String fileUuid, HttpServletResponse response);
-
-    /**
-     * 清理过期且未关联的头像文件
-     * @return
-     */
-    int cleanExpiredUnreferencedAvatars();
-
-    /**
-     * 上传图片文件
-     * @param file
-     * @return
-     * @throws IOException 
-     */
+    String uploadManagedImage(Long userId, ImagePurpose purpose, MultipartFile file);
+    /** 调用方业务事务中锁定图片，防止与清理任务并发；null 表示不设置图片。 */
+    void validateManagedImage(Long userId, ImagePurpose purpose, String url);
+    int cleanExpiredUnreferencedImages();
     String uploadImage(MultipartFile file);
-
 }

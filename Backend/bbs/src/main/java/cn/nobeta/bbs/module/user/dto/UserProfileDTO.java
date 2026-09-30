@@ -1,24 +1,45 @@
 package cn.nobeta.bbs.module.user.dto;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
-import cn.nobeta.bbs.common.constant.NameConstant;
-
 
 @Data
 public class UserProfileDTO {
-
-    @NotBlank(message = "昵称不能为空")
-    @Size(min = 1, max = 10, message = "昵称长度需在 1-10 之间")
+    @NotBlank
+    @Size(min = 1, max = 10)
     private String nickname;
+    @NotNull
+    @Min(0)
+    @Max(2)
+    private Integer sex;
+    @NotNull
+    @Size(max = 10)
+    private String race;
+    @NotNull
+    @Size(max = 255)
+    private String signature;
+    @Size(max = 2048)
+    private String backgroundImageUrl;
 
-    @Min(value = 0, message = "性别信息异常")
-    @Max(value = 2, message = "性别信息异常")
-    private Integer sex = NameConstant.DEFAULT_SEX;
-
-    @Size(min = 1, max = 10, message = "种族长度需在 1-10 之间")
-    private String race = NameConstant.DEFAULT_RACE;
+    // 必需构造参数区分缺少字段与显式 null，不增加兼容状态。
+    @JsonCreator
+    public UserProfileDTO(
+        @JsonProperty(value = "nickname", required = true) String nickname,
+        @JsonProperty(value = "sex", required = true) Integer sex,
+        @JsonProperty(value = "race", required = true) String race,
+        @JsonProperty(value = "signature", required = true) String signature,
+        @JsonProperty(value = "backgroundImageUrl", required = true) String backgroundImageUrl
+    ) {
+        this.nickname = nickname;
+        this.sex = sex;
+        this.race = race;
+        this.signature = signature;
+        this.backgroundImageUrl = backgroundImageUrl;
+    }
 }

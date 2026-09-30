@@ -93,12 +93,14 @@ pagehelper:
 para:
   # 文件存储位置
   file:
-    avatar:
-      root-path: ${para.file.avatar.root-path}
-      max-size: ${para.file.avatar.max-size}
-      expire: ${para.file.avatar.expire}
+    managed:
+      public-base-url: ${PARA_FILE_PUBLIC_BASE_URL:http://localhost:8080/bbs/i/avatar/}
+      root-path: ${PARA_FILE_ROOT_PATH:./data/}
+      avatar-max-size: 10485760
+      max-size: 15728640  # 背景图与封面大小上限
+      expire: 2
     image:
-      max-size: ${para.file.image.max-size}
+      max-size: 15728640
   # Github配置
   github:
     branch: main

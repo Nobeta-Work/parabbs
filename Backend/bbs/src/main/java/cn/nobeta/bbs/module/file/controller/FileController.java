@@ -1,70 +1,57 @@
 package cn.nobeta.bbs.module.file.controller;
 
-
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
-
-import io.swagger.v3.oas.annotations.tags.Tag;
-import lombok.RequiredArgsConstructor;
 import cn.nobeta.bbs.common.annotation.AuditLog;
 import cn.nobeta.bbs.common.annotation.RateLimit;
 import cn.nobeta.bbs.common.enums.Scene;
+import cn.nobeta.bbs.common.enums.ResultCode;
+import cn.nobeta.bbs.common.exception.BusinessException;
 import cn.nobeta.bbs.common.result.Result;
+import cn.nobeta.bbs.module.auth.dto.UserAuthInfo;
+import cn.nobeta.bbs.module.file.entity.ImagePurpose;
 import cn.nobeta.bbs.module.file.service.FileService;
+import cn.nobeta.bbs.module.file.vo.ImageUploadVO;
+import cn.nobeta.bbs.module.user.vo.AvatarVO;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
 
-/**
- * 文件相关接口
- */
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("api/")
-@Tag(name = "文件传输相关接口", description = "处理文件上传、下载接口")
+@RequestMapping("/api")
+@Tag(name = "文件上传接口")
 public class FileController {
-
     private final FileService fileService;
-    
-    /**
-     * 全局头像上传接口(无需身份校验=>无关联用户)
-     * @param file
-     * @return
-     */
-    @RateLimit(scene = Scene.WRITE)
-    @AuditLog(message = "用户上传头像", data = "{'filename': #p0.originalFilename, 'size': #p0.size}")
-    @PostMapping("/uploadAvatar")
-    public Result<String> uploadAvatar(@RequestParam("file") MultipartFile file) {
-        String avatarKey = fileService.uploadAvatar(file);
-        return Result.success(avatarKey);
-    }
-    /**
-     * 2026-4-18
-     * v0.2.1 版本迭代，图床实现，删除下载接口
-     */
-    // /**
-    //  * 全局头像下载接口
-    //  * @param fileUuid
-    //  * @param response
-    //  * @throws IOException
-    //  */
-    // @Operation(summary = "全局头像下载接口")
-    // @GetMapping("/downloadAvatar")
-    // public void downloadAvatar(@RequestParam("avatar") String fileUuid, HttpServletResponse response) throws IOException {
-    //     log.info(">头像文件下载<");
-    //     fileService.downloadAvatar(fileUuid, response);
-    // }
 
-    /**
-     * 图片上传接口
-     * @param file
-     * @return
-     */
     @RateLimit(scene = Scene.WRITE)
-    @AuditLog(message = "用户上传图片", data = "{'filename': #p0.originalFilename, 'size': #p0.size}")
+    @AuditLog(message = "用户上传头像", data = "{'size': #p1.size}")
+    @PostMapping("/uploadAvatar")
+    public Result<AvatarVO> uploadAvatar(@AuthenticationPrincipal UserAuthInfo user,
+        @RequestParam("file") MultipartFile file) {
+        return Result.success(AvatarVO.builder().avatarUrl(
+            fileService.uploadManagedImage(user.getUser().getId(), ImagePurpose.AVATAR, file)).build());
+    }
+
+    @RateLimit(scene = Scene.WRITE)
+    @AuditLog(message = "用户上传资料图片", data = "{'purpose': #p1, 'size': #p2.size}")
+    @PostMapping("/images")
+    public Result<ImageUploadVO> uploadManagedImage(@AuthenticationPrincipal UserAuthInfo user,
+        @RequestParam("purpose") ImagePurpose purpose, @RequestParam("file") MultipartFile file) {
+        if (purpose == ImagePurpose.AVATAR) {
+            throw new BusinessException(ResultCode.ILLEGAL_ARGUMENT, "头像请使用头像上传接口");
+        }
+        return Result.success(ImageUploadVO.builder().purpose(purpose).url(
+            fileService.uploadManagedImage(user.getUser().getId(), purpose, file)).build());
+    }
+
+    @RateLimit(scene = Scene.WRITE)
+    @AuditLog(message = "用户上传正文图片", data = "{'size': #p0.size}")
     @PostMapping("/uploadImage")
     public Result<String> uploadImage(@RequestParam("file") MultipartFile file) {
-        String url = fileService.uploadImage(file);
-        return Result.success(url);
+        return Result.success(fileService.uploadImage(file));
     }
 }

@@ -5,15 +5,19 @@ import java.util.List;
 
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
 
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class AdminUserVO {
 
     private Long id;
     private String username;
     private String nickname;
-    private String avatar;
+    private String avatarUrl;
     /** 状态 0:封禁 1:正常 */
     private Integer status;
     private LocalDateTime createTime;

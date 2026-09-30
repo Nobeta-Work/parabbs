@@ -42,6 +42,8 @@ import cn.nobeta.bbs.module.blog.vo.BlogPublicBriefVO;
 import cn.nobeta.bbs.module.blog.vo.BlogPublicDetailVO;
 import cn.nobeta.bbs.module.box.OutboxDomainEventPublisher;
 import cn.nobeta.bbs.module.folder.entity.Folder;
+import cn.nobeta.bbs.module.file.entity.ImagePurpose;
+import cn.nobeta.bbs.module.file.service.FileService;
 import cn.nobeta.bbs.module.folder.mapper.FolderMapper;
 import cn.nobeta.bbs.module.like.mapper.LikeMapper;
 import cn.nobeta.bbs.module.tag.mapper.TagMapper;
@@ -64,6 +66,7 @@ public class BlogServiceImpl implements BlogService{
     private final StringRedisTemplate stringRedisTemplate;
     private final OutboxDomainEventPublisher eventPublisher;
     private final BlogSearchService blogSearchService;
+    private final FileService fileService;
 
     /**
      * 分页查询
@@ -127,6 +130,7 @@ public class BlogServiceImpl implements BlogService{
                     .id(blog.getId())
                     .title(blog.getTitle())
                     .summary(blog.getSummary())
+                .coverUrl(blog.getCoverUrl())
                     .isPublished(blog.getIsPublished())
                     .likeCount(blog.getLikeCount())
                     .commentsCount(blog.getCommentsCount())
@@ -154,6 +158,7 @@ public class BlogServiceImpl implements BlogService{
      * @return
      */
     @Override
+    @Transactional
     public Long addBlogByUserId(Long userId, BlogSaveDTO blogSaveDTO) {
 
         // 1. 生成雪花 ID
@@ -168,12 +173,15 @@ public class BlogServiceImpl implements BlogService{
             }
         }
         
+        fileService.validateManagedImage(userId, ImagePurpose.COVER, blogSaveDTO.getCoverUrl());
+
         // 3. 封装 blog
         Blog blog = Blog.builder()
                 .id(blogId)
                 .authorId(userId)
                 .folderId(folderId)
                 .isPublished(0)
+                .coverUrl(blogSaveDTO.getCoverUrl())
                 .title(blogSaveDTO.getTitle())
                 .build();
 
@@ -249,6 +257,7 @@ public class BlogServiceImpl implements BlogService{
                 .id(blog.getId())
                 .title(blog.getTitle())
                 .summary(blog.getSummary())
+                .coverUrl(blog.getCoverUrl())
                 .isPublished(blog.getIsPublished())
                 .author(author)
                 .tags(tags)
@@ -292,6 +301,7 @@ public class BlogServiceImpl implements BlogService{
                 .id(blog.getId())
                 .title(blog.getTitle())
                 .summary(blog.getSummary())
+                .coverUrl(blog.getCoverUrl())
                 .isPublished(blog.getIsPublished())
                 .author(author)
                 .tags(tags)
@@ -372,6 +382,8 @@ public class BlogServiceImpl implements BlogService{
                 throw new BusinessException(ResultCode.FORBIDDEN);
             }
         }
+
+        fileService.validateManagedImage(blog.getAuthorId(), ImagePurpose.COVER, blogEditDTO.getCoverUrl());
 
         // 4. blog 更新
         blogMapper.updateBlogById(blogId, blogEditDTO);

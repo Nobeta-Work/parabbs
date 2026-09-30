@@ -8,6 +8,9 @@ import org.apache.ibatis.annotations.Param;
 
 import cn.nobeta.bbs.module.user.dto.UserProfileDTO;
 import cn.nobeta.bbs.module.user.entity.User;
+import cn.nobeta.bbs.module.user.entity.UserProfile;
+import cn.nobeta.bbs.module.user.vo.UserInfoVO;
+import cn.nobeta.bbs.module.user.vo.UserProfileVO;
 import cn.nobeta.bbs.module.user.vo.UserBriefVO;
 
 @Mapper
@@ -19,6 +22,12 @@ public interface UserMapper {
      * @return
      */
     User selectUserById(@Param("userId") Long userId);
+
+    UserProfileVO selectUserProfileById(@Param("userId") Long userId);
+
+    UserInfoVO selectPublicUserInfoById(@Param("userId") Long userId);
+
+    void insertUserProfile(UserProfile profile);
 
     /**
      * 更新指定用户的密码
@@ -37,9 +46,9 @@ public interface UserMapper {
     /**
      * 更新指定用户的头像字段
      * @param userId
-     * @param avatarKey
+     * @param avatarUrl
      */
-    void updateUserAvatar(@Param("userId") Long userId, @Param("avatarKey") String avatarKey);
+    void updateUserAvatar(@Param("userId") Long userId, @Param("avatarUrl") String avatarUrl);
 
     /**
      * 根据 id 批量查询用户简要信息

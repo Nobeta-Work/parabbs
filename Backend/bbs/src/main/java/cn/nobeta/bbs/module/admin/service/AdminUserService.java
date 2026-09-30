@@ -55,13 +55,13 @@ public class AdminUserService {
         Integer pageSize = query.getPageSize();
         PageHelper.startPage(pageNum, pageSize);
 
-        Page<User> users = adminMapper.selectAdminUserPage(query);
+        Page<AdminUserVO> users = adminMapper.selectAdminUserPage(query);
         if (users.isEmpty()) {
             return PageResult.empty(pageNum, pageSize);
         }
 
         // 3. 批量查询角色
-        List<Long> userIds = users.stream().map(User::getId).toList();
+        List<Long> userIds = users.stream().map(AdminUserVO::getId).toList();
         Collection<UserRoleBrief> briefs = adminMapper.selectUserRoleBriefByUserIds(userIds);
         Map<Long, List<String>> roleMap = briefs.stream().collect(Collectors.groupingBy(
                 UserRoleBrief::getUserId,
@@ -69,17 +69,10 @@ public class AdminUserService {
         ));
 
         // 4. 组装返回体
-        List<AdminUserVO> records = users.stream()
-                .map(u -> AdminUserVO.builder()
-                        .id(u.getId())
-                        .username(u.getUsername())
-                        .nickname(u.getNickname())
-                        .avatar(u.getAvatar())
-                        .status(u.getStatus())
-                        .createTime(u.getCreateTime())
-                        .roleCodes(roleMap.getOrDefault(u.getId(), Collections.emptyList()))
-                        .build()
-                ).toList();
+        List<AdminUserVO> records = users.stream().map(user -> {
+            user.setRoleCodes(roleMap.getOrDefault(user.getId(), Collections.emptyList()));
+            return user;
+        }).toList();
 
         return PageResult.<AdminUserVO>builder()
                 .total(users.getTotal())

@@ -7,6 +7,7 @@
         title,
         content,
         summary,
+        cover_url,
         author_id,
         folder_id,
         is_published,
@@ -28,6 +29,7 @@
             is_published,
             title,
             summary,
+            cover_url,
             content
         ) VALUES (
             #{id},
@@ -36,6 +38,7 @@
             #{isPublished},
             #{title},
             '',
+            #{coverUrl},
             ''
         )
     </insert>
@@ -117,6 +120,7 @@
             </if>
             title = #{dto.title},
             summary = #{dto.summary},
+            cover_url = #{dto.coverUrl},
             content = #{dto.content}
         WHERE id = #{blogId}
     </update>
@@ -203,6 +207,7 @@
         <result property="authorNickname" column="author_nickname" />
         <result property="title" column="title" />
         <result property="summary" column="summary" />
+        <result property="coverUrl" column="cover_url" />
         <result property="content" column="content" />
         <result property="likeCount" column="like_count" />
         <result property="commentsCount" column="comments_count" />
@@ -224,6 +229,7 @@
             u.nickname AS author_nickname,
             b.title,
             b.summary,
+            b.cover_url,
             b.content,
             b.like_count,
             b.comments_count,
@@ -232,7 +238,7 @@
             bt.tag_id,
             t.name AS tag_name
         FROM blog b
-        JOIN sys_user u ON u.id = b.author_id
+        JOIN user_profile u ON u.user_id = b.author_id
         LEFT JOIN blog_tag bt ON bt.blog_id = b.id
         LEFT JOIN tag t ON t.id = bt.tag_id
         WHERE b.id = #{blogId}
@@ -244,6 +250,10 @@
         FROM blog
         WHERE is_published = 1
         ORDER BY id ASC
+    </select>
+
+    <select id="selectPublishedBlogIdsByAuthor" resultType="long">
+        SELECT id FROM blog WHERE author_id = #{authorId} AND is_published = 1 ORDER BY id
     </select>
 
     <update id="reconcileCommentsCount">

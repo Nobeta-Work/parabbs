@@ -176,6 +176,12 @@ public class AuthServiceTest {
         assertEquals(savedUser.getPassword(), "encoded-pwd");
         assertEquals(savedUser.getId(), 1L);
 
+        ArgumentCaptor<cn.nobeta.bbs.module.user.entity.UserProfile> profileCaptor =
+            ArgumentCaptor.forClass(cn.nobeta.bbs.module.user.entity.UserProfile.class);
+        verify(userMapper).insertUserProfile(profileCaptor.capture());
+        assertEquals(profileCaptor.getValue().getUserId(), 1L);
+        assertEquals(profileCaptor.getValue().getNickname(), dto.getNickname());
+
         // 验证：调用插入默认角色方法，且参数为 1
         verify(authMapper).insertUserDefaultRole(1L);
     }

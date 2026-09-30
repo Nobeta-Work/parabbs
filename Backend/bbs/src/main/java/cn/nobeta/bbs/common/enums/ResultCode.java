@@ -20,6 +20,7 @@ public enum ResultCode {
     OLD_PASSWORD_ERROR(400, "密码错误"),
     NEW_PASSWORD_SAME_AS_OLD(400, "新旧密码不能相同"),
     USERNAME_DUPLICATE(400, "用户名重复"),
+    NICKNAME_DUPLICATE(400, "昵称重复"),
     ILLEGAL_ARGUMENT(400, "参数校验异常"),
     
     // =========== 文件模块 ===========

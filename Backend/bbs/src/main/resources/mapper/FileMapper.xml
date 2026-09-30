@@ -1,38 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="cn.nobeta.bbs.module.file.mapper.FileMapper">
-
-    <!-- insertAvatar -->
-    <insert id="insertAvatar">
-        INSERT INTO avatar_info (
-            file_uuid,
-            is_referenced,
-            user_id,
-            expire_time
-        ) VALUES (
-            #{fileInfo.fileUuid},
-            #{fileInfo.isReferenced},
-            #{fileInfo.uid},
-            #{fileInfo.expireTime}
-        )
+    <insert id="insertImage" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO image_file (storage_key, public_url, user_id, purpose, expire_time)
+        VALUES (#{storageKey}, #{publicUrl}, #{userId}, #{purpose}, #{expireTime})
     </insert>
-
-    <!-- updateAvator -->
-    <update id="updateAvator">
-        UPDATE avatar_info
-        SET
-            is_referenced = #{avatorInfo.isReferenced},
-            user_id = #{avatorInfo.uid}
-        WHERE file_uuid = #{avatorInfo.fileUuid}
-    </update>
-
-    <!-- batchDeleteByIds -->
-    <delete id="batchDeleteByIds">
-        DELETE FROM avatar_info
-        WHERE id IN
-        <foreach collection="ids" item="id" open="(" separator="," close=")">
-            #{id}
-        </foreach>
-    </delete>
-
+    <select id="selectByUrlForUpdate" resultType="cn.nobeta.bbs.module.file.entity.ImageFile">
+        SELECT id, storage_key, public_url, user_id, purpose, expire_time
+        FROM image_file WHERE public_url = #{url} FOR UPDATE
+    </select>
+    <select id="selectByIdForUpdate" resultType="cn.nobeta.bbs.module.file.entity.ImageFile">
+        SELECT id, storage_key, public_url, user_id, purpose, expire_time
+        FROM image_file WHERE id = #{id} FOR UPDATE
+    </select>
+    <select id="selectExpiredImageIds" resultType="long">
+        SELECT f.id FROM image_file f WHERE f.expire_time &lt;= #{now}
+          AND NOT EXISTS (SELECT 1 FROM user_profile p WHERE p.avatar_url = f.public_url OR p.background_image_url = f.public_url)
+          AND NOT EXISTS (SELECT 1 FROM blog b WHERE b.cover_url = f.public_url)
+        ORDER BY f.id LIMIT 200
+    </select>
+    <select id="isReferenced" resultType="boolean">
+        SELECT EXISTS(SELECT 1 FROM user_profile WHERE avatar_url = #{url} OR background_image_url = #{url})
+            OR EXISTS(SELECT 1 FROM blog WHERE cover_url = #{url})
+    </select>
+    <delete id="deleteImage">DELETE FROM image_file WHERE id = #{id}</delete>
 </mapper>

@@ -8,6 +8,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 @Data
 public class BlogEditDTO {
@@ -31,4 +33,11 @@ public class BlogEditDTO {
 
     private List<Long> tagIds;
 
+    @Size(max = 2048)
+    private String coverUrl;
+
+    @JsonCreator
+    public BlogEditDTO(@JsonProperty(value = "coverUrl", required = true) String coverUrl) {
+        this.coverUrl = coverUrl;
+    }
 }

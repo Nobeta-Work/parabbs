@@ -1,19 +1,22 @@
 package cn.nobeta.bbs.module.user.service.impl;
 
-
-import java.util.List;
-
+import java.time.LocalDateTime;
+import java.util.Map;
+import java.util.Objects;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import cn.nobeta.bbs.common.enums.ResultCode;
+import cn.nobeta.bbs.common.event.DomainEvent;
+import cn.nobeta.bbs.common.event.EventTypes;
 import cn.nobeta.bbs.common.exception.BusinessException;
+import cn.nobeta.bbs.common.util.SnowflakeUtil;
 import cn.nobeta.bbs.module.auth.mapper.AuthMapper;
-import cn.nobeta.bbs.module.file.entity.AvatarInfo;
-import cn.nobeta.bbs.module.file.mapper.FileMapper;
+import cn.nobeta.bbs.module.blog.mapper.BlogMapper;
+import cn.nobeta.bbs.module.box.OutboxDomainEventPublisher;
+import cn.nobeta.bbs.module.file.entity.ImagePurpose;
 import cn.nobeta.bbs.module.file.service.FileService;
 import cn.nobeta.bbs.module.user.dto.PasswordEditDTO;
 import cn.nobeta.bbs.module.user.dto.UserProfileDTO;
@@ -23,168 +26,78 @@ import cn.nobeta.bbs.module.user.service.UserService;
 import cn.nobeta.bbs.module.user.vo.AvatarVO;
 import cn.nobeta.bbs.module.user.vo.UserInfoVO;
 import cn.nobeta.bbs.module.user.vo.UserProfileVO;
+import lombok.RequiredArgsConstructor;
 
 @Service
-@Slf4j
 @RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
-
     private final UserMapper userMapper;
     private final AuthMapper authMapper;
-    private final FileMapper fileMapper;
     private final FileService fileService;
     private final PasswordEncoder passwordEncoder;
+    private final BlogMapper blogMapper;
+    private final OutboxDomainEventPublisher eventPublisher;
 
-    // 2026-5-26 "v0.3.0 登陆认证接口切换 auth 模块"
-
-    /**
-     * 根据 userId 查询用户个人资料
-     * @param userId
-     * @return
-     */
     @Override
     public UserProfileVO queryUserProfileById(Long userId) {
-        // 1. 根据 id 查询用户
-        User user = userMapper.selectUserById(userId);
-        if (user == null) {
-            throw new BusinessException(ResultCode.RESOURCE_NOT_FOUND, "用户为空");
-        }
-
-        // 2. 根据 id 查询 roles
-        List<String> roles = authMapper.selectRoleCodesByUserId(userId);
-
-        // 3. 实体转换
-        UserProfileVO vo = UserProfileVO.builder()
-                .id(userId)
-                .username(user.getUsername())
-                .nickname(user.getNickname())
-                .avatar(user.getAvatar())
-                .sex(user.getSex())
-                .race(user.getRace())
-                .signature(user.getSignature())
-                .roles(roles)
-                .createTime(user.getCreateTime())
-                .build();
-        
-        // 4. 返回
-        return vo;
+        UserProfileVO profile = requireProfile(userId);
+        profile.setRoles(authMapper.selectRoleCodesByUserId(userId));
+        return profile;
     }
 
-    /**
-     * 根据 id 查询个人信息
-     * @param id
-     * @return
-     */
     @Override
     public UserInfoVO queryUserInfoById(Long id) {
-        // 1. 根据 id 查询用户
-        User user = userMapper.selectUserById(id);
-        if (user == null) {
-            throw new BusinessException(ResultCode.RESOURCE_NOT_FOUND, "用户不存在");
-        }
-
-        // 2. 实体转换
-        UserInfoVO vo = UserInfoVO.builder()
-                .id(id)
-                .nickname(user.getNickname())
-                .avatar(user.getAvatar())
-                .sex(user.getSex())
-                .race(user.getRace())
-                .signature(user.getSignature())
-                .createTime(user.getCreateTime())
-                .build();
-
-        // 3. 返回
-        return vo;
+        UserInfoVO info = userMapper.selectPublicUserInfoById(id);
+        if (info == null) throw new BusinessException(ResultCode.RESOURCE_NOT_FOUND, "用户不存在");
+        return info;
     }
 
-    /**
-     * 更新个人资料
-     * @param userId
-     * @param profileDTO
-     */
     @Override
-    public void editUserProfile(Long userId, UserProfileDTO profileDTO) {
-        // 1. 根据 id 查询用户
-        User user = userMapper.selectUserById(userId);
-        if (user == null) {
-            throw new BusinessException(ResultCode.RESOURCE_NOT_FOUND, "用户不存在");
+    @Transactional
+    public void editUserProfile(Long userId, UserProfileDTO dto) {
+        UserProfileVO previous = requireProfile(userId);
+        fileService.validateManagedImage(userId, ImagePurpose.BACKGROUND, dto.getBackgroundImageUrl());
+        try {
+            userMapper.updateUserProfileById(userId, dto);
+        } catch (DuplicateKeyException e) {
+            throw new BusinessException(ResultCode.NICKNAME_DUPLICATE);
         }
-
-        // 2. 更新数据库
-        userMapper.updateUserProfileById(userId, profileDTO);
+        // 作者资料当前直接从 MySQL 查询，没有需要失效的独立资料缓存。
+        if (!Objects.equals(previous.getNickname(), dto.getNickname())) {
+            for (Long blogId : blogMapper.selectPublishedBlogIdsByAuthor(userId)) {
+                eventPublisher.publish(DomainEvent.builder().eventId(SnowflakeUtil.nextId())
+                    .eventType(EventTypes.BLOG_UPDATED).aggregateType("blog").aggregateId(blogId)
+                    .payload(Map.of("blogId", blogId)).createTime(LocalDateTime.now()).build());
+            }
+        }
     }
 
-    /**
-     * 更新指定用户密码
-     * @param userId
-     * @param passwordEditDTO
-     * @return
-     */
     @Override
-    public void editUserPassword(Long userId, PasswordEditDTO passwordEditDTO) {
-        // 1. 根据 id 查询用户
+    public void editUserPassword(Long userId, PasswordEditDTO dto) {
         User user = userMapper.selectUserById(userId);
-        if (user == null) {
-            throw new BusinessException(ResultCode.RESOURCE_NOT_FOUND, "用户不存在");
-        }
-
-        // 2. 校验旧密码
-        if (!passwordEncoder.matches(passwordEditDTO.getOldPassword(), user.getPassword())) {
+        if (user == null) throw new BusinessException(ResultCode.RESOURCE_NOT_FOUND, "用户不存在");
+        if (!passwordEncoder.matches(dto.getOldPassword(), user.getPassword())) {
             throw new BusinessException(ResultCode.OLD_PASSWORD_ERROR);
         }
-
-        String newPassword = passwordEditDTO.getNewPassword();
-
-        if (passwordEncoder.matches(newPassword, user.getPassword())) {
+        if (passwordEncoder.matches(dto.getNewPassword(), user.getPassword())) {
             throw new BusinessException(ResultCode.NEW_PASSWORD_SAME_AS_OLD);
         }
-
-        // 3. 更新数据库
-        userMapper.updateUserPassword(userId, passwordEncoder.encode(newPassword));
-        
+        userMapper.updateUserPassword(userId, passwordEncoder.encode(dto.getNewPassword()));
     }
 
-    /**
-     * 更新指定用户的头像
-     * @param userId
-     * @param file
-     * @return
-     */
     @Override
+    @Transactional
     public AvatarVO editUserAvatar(Long userId, MultipartFile file) {
-
-        // 查询用户信息
-        User user = userMapper.selectUserById(userId);
-        if (user == null) {
-            throw new BusinessException(ResultCode.RESOURCE_NOT_FOUND, "用户不存在");
-        }
-        
-
-        // 文件上传磁盘，存入avatar_info数据库，无关联
-        String avatarKey = fileService.uploadAvatar(file);
-        // 更新关联
-        AvatarInfo avatarInfo = AvatarInfo.builder()
-                        .fileUuid(avatarKey)
-                        .uid(userId)
-                        .isReferenced(1)
-                        .build();
-        fileMapper.updateAvator(avatarInfo);
-
-        // 更新数据库
-
-        userMapper.updateUserAvatar(userId, avatarKey);
-
-        // 返回头像信息
-
-        AvatarVO vo = AvatarVO.builder()
-                .avatarKey(avatarKey)
-                .build();
-
-        return vo;
+        requireProfile(userId);
+        String url = fileService.uploadManagedImage(userId, ImagePurpose.AVATAR, file);
+        fileService.validateManagedImage(userId, ImagePurpose.AVATAR, url);
+        userMapper.updateUserAvatar(userId, url);
+        return AvatarVO.builder().avatarUrl(url).build();
     }
 
-    
-
-
+    private UserProfileVO requireProfile(Long id) {
+        UserProfileVO profile = userMapper.selectUserProfileById(id);
+        if (profile == null) throw new BusinessException(ResultCode.RESOURCE_NOT_FOUND, "用户不存在");
+        return profile;
+    }
 }

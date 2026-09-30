@@ -47,16 +47,10 @@
         INSERT INTO sys_user (
             username,
             password,
-            nickname,
-            sex,
-            race,
             status
         ) VALUES (
             #{username},
             #{password},
-            #{nickname},
-            #{sex},
-            #{race},
             #{status}
         )
     </insert>
