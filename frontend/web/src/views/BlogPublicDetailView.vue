@@ -490,7 +490,9 @@ onUnmounted(() => {
       </n-result>
 
       <template v-else-if="blog">
-      <ContentImage :src="blog.coverUrl" :alt="blog.title + '封面'" eager class="article-cover" />
+      <div v-if="blog.coverUrl" class="article-cover-frame">
+        <ContentImage :src="blog.coverUrl" :alt="blog.title + '封面'" eager class="article-cover" />
+      </div>
       <div class="detail-shell">
         <aside class="detail-sidebar">
           <section class="author-card editorial-surface">
@@ -757,9 +759,31 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.article-cover-frame {
+  position: relative;
+  width: min(900px, calc(100% - 80px));
+  margin: 32px auto 0;
+  border-radius: 16px 16px 0 0;
+  overflow: hidden;
+}
+.article-cover-frame:not(:has(.article-cover)) { display: none; }
+.article-cover-frame::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent 55%, color-mix(in srgb, var(--bg-primary) 35%, transparent) 80%, var(--bg-primary));
+}
 .article-cover {
-  height: clamp(220px, 32vw, 460px);
+  height: auto;
+  max-height: min(32dvh, 300px);
+  object-fit: contain;
   aspect-ratio: auto;
+  background: transparent;
+}
+@media (max-width:640px) {
+  .article-cover-frame { width: calc(100% - 36px); margin-top: 20px; border-radius: 10px 10px 0 0; }
+  .article-cover { max-height: 220px; }
 }
 .public-detail-page {
   min-height: 100vh;

@@ -2,14 +2,15 @@
 import { ref, watch, computed, onUnmounted, nextTick, h } from 'vue'
 import { useRoute } from 'vue-router'
 import {
-  NUpload, NIcon, useMessage, NSpin, NModal, NForm, NFormItem, NInput, NRadioGroup, NRadio, NAvatar
+  NUpload, NIcon, useMessage, NSpin, NModal, NForm, NFormItem, NInput, NRadioGroup, NRadio, NAvatar, NPagination
 } from 'naive-ui'
 import {
-  PencilOutline, CloseOutline, CameraOutline, Person
+  PencilOutline, CloseOutline, Person
 } from '@vicons/ionicons5'
 import { getUserInfo, updateCurrentUserAvatar, updateCurrentUserProfile } from '@/api/user'
 import { getPublicBlogPage } from '@/api/blog'
 import { resolveAvatarUrl } from '@/utils/avatar'
+import { DateUtils } from '@/types/date'
 import { useUserStore } from '@/stores/user'
 import type { BlogPublicBriefVO, UserInfoVO, UserSex } from '@/types'
 import ArticleCard from '@/components/ArticleCard.vue'
@@ -30,12 +31,34 @@ const backgroundUploading = ref(false)
 watch(() => user.value?.backgroundImageUrl, () => { backgroundLoaded.value = false })
 const userAvatarUrl = computed(() => resolveAvatarUrl(user.value?.avatarUrl))
 const blogList = ref<BlogPublicBriefVO[]>([])
+const publicationsElement = ref<HTMLElement | null>(null)
+const summaryObserver = new ResizeObserver(entries => {
+  for (const entry of entries) {
+    const element = entry.target as HTMLElement
+    const lineHeight = parseFloat(getComputedStyle(element).lineHeight)
+    if (lineHeight > 0) element.style.setProperty('--profile-summary-lines', String(Math.max(1, Math.floor(entry.contentRect.height / lineHeight))))
+  }
+})
+watch([blogList, publicationsElement], async () => {
+  summaryObserver.disconnect()
+  await nextTick()
+  publicationsElement.value?.querySelectorAll('.summary').forEach(element => summaryObserver.observe(element))
+}, { flush: 'post' })
 const blogTotal = ref(0)
 const blogPage = ref(1)
-const hasMoreBlogs = ref(true)
-const loadingMoreBlogs = ref(false)
-const journeySentinel = ref<HTMLDivElement | null>(null)
-let journeyObserver: IntersectionObserver | null = null
+const blogPages = ref(1)
+const loadingBlogs = ref(false)
+const blogError = ref(false)
+const requestedBlogPage = ref(1)
+const compactViewport = matchMedia('(max-width: 900px), (max-height: 540px)')
+const blogPageSize = ref(compactViewport.matches ? 1 : 3)
+function resizePage() {
+  blogPageSize.value = compactViewport.matches ? 1 : 3
+  if (user.value) void fetchBlogs(1)
+}
+compactViewport.addEventListener('change', resizePage)
+let blogRequest = 0
+let profileRequest = 0
 
 const renderDefaultAvatar = () => h(NIcon, null, { default: () => h(Person) })
 const loading = ref(false)
@@ -235,53 +258,60 @@ const handleSaveProfile = async () => {
   }
 }
 
-const fetchBlogs = async (reset = false): Promise<void> => {
-  if (loadingMoreBlogs.value) return
-
-  loadingMoreBlogs.value = true
-  const nextPage = reset ? 1 : blogPage.value + 1
+const fetchBlogs = async (page = 1): Promise<void> => {
+  const request = ++blogRequest
+  const authorId = uid.value
+  loadingBlogs.value = true
+  blogError.value = false
+  requestedBlogPage.value = page
   try {
     const blogs = await getPublicBlogPage({
-      pageNum: nextPage,
-      pageSize: 6,
-      authorId: uid.value,
+      pageNum: page,
+      pageSize: blogPageSize.value,
+      authorId,
       sortField: 'createTime',
       sortOrder: 'desc'
     })
 
-    blogPage.value = nextPage
+    if (request !== blogRequest || authorId !== uid.value) return
+    blogPage.value = page
     blogTotal.value = blogs.total
-    blogList.value = reset ? blogs.records : [...blogList.value, ...blogs.records]
-    hasMoreBlogs.value = nextPage < blogs.pages && blogs.records.length > 0
+    blogList.value = blogs.records
+    blogPages.value = Math.max(1, blogs.pages)
   } catch (error) {
-    message.error('博客加载失败')
+    if (request !== blogRequest || authorId !== uid.value) return
+    blogError.value = true
+    message.error('博客加载失败，请重试')
   } finally {
-    loadingMoreBlogs.value = false
+    if (request === blogRequest) loadingBlogs.value = false
   }
 }
 
 const fetchProfile = async () => {
+  const request = ++profileRequest
+  const authorId = uid.value
+  ++blogRequest
+  loadingBlogs.value = false
   loading.value = true
+  pageLoaded.value = false
+  user.value = null
+  blogList.value = []
+  blogPage.value = 1
+  blogTotal.value = 0
+  blogPages.value = 1
   try {
-    const profile = await getUserInfo(uid.value)
+    const profile = await getUserInfo(authorId)
+    if (request !== profileRequest || authorId !== uid.value) return
     user.value = profile
     document.title = `${profile.nickname} - Para BBS`
-    await fetchBlogs(true)
-    await nextTick()
-    journeyObserver?.disconnect()
-    if (journeySentinel.value) {
-      journeyObserver = new IntersectionObserver((entries) => {
-        if (entries[0]?.isIntersecting && hasMoreBlogs.value) {
-          void fetchBlogs()
-        }
-      }, { rootMargin: '360px 0px' })
-      journeyObserver.observe(journeySentinel.value)
-    }
+    await fetchBlogs(1)
   } catch (error) {
-    message.error('无法加载用户信息')
+    if (request === profileRequest) message.error('无法加载用户信息')
   } finally {
-    loading.value = false
-    window.setTimeout(() => { pageLoaded.value = true }, 100)
+    if (request === profileRequest) {
+      loading.value = false
+      pageLoaded.value = true
+    }
   }
 }
 
@@ -290,8 +320,10 @@ watch(uid, () => { void fetchProfile() }, { immediate: true })
 
 onUnmounted(() => {
   cancelAnimationFrame(portraitFrame)
-  journeyObserver?.disconnect()
-  journeyObserver = null
+  summaryObserver.disconnect()
+  compactViewport.removeEventListener('change', resizePage)
+  ++blogRequest
+  ++profileRequest
 })
 
 </script>
@@ -305,40 +337,45 @@ onUnmounted(() => {
     <n-spin :show="loading">
       <div class="container" v-if="user">
 
-        <div class="profile-masthead"><span>PARA BBS</span><span>{{ blogTotal }} 篇文章</span></div>
-        <header class="profile-header" @pointermove="movePortrait" @pointerleave="resetPortrait">
-          <div class="cover-orbit" aria-hidden="true"></div>
-          <div class="profile-avatar">
-<n-upload v-if="isCurrentUser" :show-file-list="false" :custom-request="handleAvatarChange" accept="image/*">
-<button class="avatar-button" aria-label="更换头像">
-<n-avatar :size="220" :src="userAvatarUrl" :render-icon="renderDefaultAvatar" />
-<span class="avatar-edit-badge">
-<n-icon :component="CameraOutline" />
-</span>
-</button>
-</n-upload>
-<n-avatar v-else :size="220" :src="userAvatarUrl" :render-icon="renderDefaultAvatar" />
-</div>
+        <div class="profile-masthead"><span>PARA BBS</span><span>UID {{ user.id }}</span></div>
+        <header class="profile-hero" @pointermove="movePortrait" @pointerleave="resetPortrait">
           <div class="profile-info">
-<h1><span class="greeting">你好，我是</span><span class="profile-name">{{ user.nickname }}</span></h1>
-<p class="uid">UID · {{ user.id }}</p>
-<ProfileIntro v-if="user.signature" :text="user.signature" class="signature" />
-
-</div>
+            <h1>{{ user.nickname }}</h1>
+            <ProfileIntro v-if="user.signature" :text="user.signature" class="signature" :title="user.signature" />
+            <p v-else class="signature-empty">暂无简介</p>
+            <dl class="profile-details" aria-label="个人资料">
+              <div><dt>性别</dt><dd>{{ user.sex === 1 ? '男' : user.sex === 2 ? '女' : '保密' }}</dd></div>
+              <div><dt>种族</dt><dd :title="user.race || undefined">{{ user.race || '未填写' }}</dd></div>
+              <div><dt>加入</dt><dd><time :datetime="user.createTime">{{ user.createTime ? DateUtils.isoToDateOnly(user.createTime) : '未提供' }}</time></dd></div>
+            </dl>
+          </div>
+          <div class="profile-avatar">
+            <n-upload v-if="isCurrentUser" :show-file-list="false" :custom-request="handleAvatarChange" accept="image/*">
+              <button class="avatar-button" aria-label="更换头像">
+                <n-avatar :size="220" :src="userAvatarUrl" :render-icon="renderDefaultAvatar" />
+                <span class="avatar-edit-badge">CHANGE</span>
+              </button>
+            </n-upload>
+            <n-avatar v-else :size="220" :src="userAvatarUrl" :render-icon="renderDefaultAvatar" />
+          </div>
         </header>
-        <section class="publications">
-<h2><span>文章</span><small>{{ String(blogTotal).padStart(2, '0') }}</small></h2>
-<div v-if="blogList.length" class="publication-grid">
-<div v-for="(blog, index) in blogList" :key="blog.id" class="publication-entry"><span class="article-number" aria-hidden="true">{{ String(index + 1).padStart(2, '0') }}</span><ArticleCard :blog="blog" /></div>
-<div v-if="hasMoreBlogs" ref="journeySentinel" class="journey-sentinel">
-<n-spin v-if="loadingMoreBlogs" size="small" />
-<span v-else>继续向下加载</span>
-</div>
-<p v-else class="journey-note">已显示全部文章</p>
-</div>
-<p v-else class="empty-state">尚未发布文章</p>
-</section>
-
+        <section ref="publicationsElement" class="publications" aria-label="个人文章">
+          <h2><span>文章<small>{{ blogTotal }} 篇</small></span><span class="page-indicator">{{ blogPage }} / {{ blogPages }}</span></h2>
+          <n-spin :show="loadingBlogs" class="publication-loading">
+            <div v-if="blogList.length" class="publication-grid">
+              <div v-for="(blog, index) in blogList" :key="blog.id" class="publication-entry">
+                <span class="article-number" aria-hidden="true">{{ String((blogPage - 1) * blogPageSize + index + 1).padStart(2, '0') }}</span>
+                <ArticleCard :blog="blog" />
+                <router-link class="article-open" :to="'/blog/' + blog.id" :aria-label="'阅读：' + blog.title">阅读文章<span aria-hidden="true">↗</span></router-link>
+              </div>
+            </div>
+            <p v-else-if="!blogError" class="empty-state">尚未发布文章</p>
+          </n-spin>
+          <div v-if="blogError" class="page-error"><span>文章加载失败</span><button @click="fetchBlogs(requestedBlogPage)">重试</button></div>
+          <nav v-if="blogTotal > 0" class="pagination" aria-label="文章分页">
+            <n-pagination :page="blogPage" :page-count="blogPages" :page-slot="5" :disabled="loadingBlogs" @update:page="fetchBlogs" />
+          </nav>
+        </section>
       </div>
     </n-spin>
 
@@ -431,128 +468,102 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.profile-background {
-  position: absolute;
-  inset: 0;
-  z-index: -2;
-  width: 100%;
-  height: 100%;
-  aspect-ratio: auto;
-  background: transparent;
-}
-.has-background .profile-header {
-  --text-primary: #fff;
-  --text-secondary: #f4f4f6;
-  --text-tertiary: #e1e1e7;
-  --line-color: rgb(255 255 255 / .4);
-  color: var(--text-primary);
-}
-.has-background::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background: linear-gradient(120deg, rgb(12 16 24 / .78), rgb(12 16 24 / .6));
-  pointer-events: none;
-}
-.has-background .cover-orbit { visibility: hidden; }
-.has-background .profile-header { background: transparent; border-color: rgb(255 255 255 / .25); }
-.has-background .profile-masthead,
-.has-background .profile-masthead span:first-child,
-.has-background .publications > h2,
-.has-background .publications > h2 small,
-.has-background .journey-note,
-.has-background .journey-sentinel,
-.has-background .empty-state { color: #fff; border-color: rgb(255 255 255 / .6); }
-.has-background .edit-btn,
-.has-background :deep(.typing-toggle) {
-  color: #fff;
-  background: #24242b;
-  border-color: rgb(255 255 255 / .5);
-}
-.has-background :deep(.typing-caret) { background: #fff; }
 .profile-page {
-  position: relative;
-  isolation: isolate;
-  min-height: 100dvh;
-  box-sizing: border-box;
-  padding: 76px 48px 64px;
-  background: radial-gradient(ellipse at 90% 5%, var(--accent-soft), transparent 55%), linear-gradient(135deg, var(--bg-primary) 50%, var(--bg-secondary));
+  --profile-surface: var(--bg-primary);
+  --profile-serif: 'Baskerville', 'Georgia', 'Times New Roman', 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', 'STSong', 'SimSun', serif;
+  position: relative; isolation: isolate; height: 100dvh; min-height: 0;
+  padding: 28px 48px 24px; box-sizing: border-box; overflow: hidden; color: var(--text-primary);
+  background: radial-gradient(ellipse at 90% 0%, var(--accent-soft), transparent 48%), var(--bg-primary);
 }
-
-.container {
-  margin: auto;
+.profile-page::before { content: ''; position: absolute; z-index: -1; width: 500px; height: 500px; right: -240px; top: -220px; border: 1px solid color-mix(in srgb, var(--accent-color) 16%, transparent); border-radius: 50%; pointer-events: none; }
+.profile-background { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -2; object-fit: cover; background: transparent; }
+.has-background::after { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgb(12 17 26 / .86), rgb(12 17 26 / .48)); pointer-events: none; }
+.profile-page > :deep(.n-spin-container), .profile-page > :deep(.n-spin-container > .n-spin-content) { height: 100%; min-height: 0; }
+.container { display: grid; grid-template-rows: 32px minmax(150px, .85fr) minmax(240px, 1fr); gap: 24px; max-width: 1280px; height: 100%; min-height: 0; margin: auto; }
+.profile-masthead { display: flex; align-items: flex-start; justify-content: space-between; padding-right: 120px; border-bottom: 1px solid var(--line-color); color: var(--text-tertiary); font-size: 10px; letter-spacing: .16em; }
+.profile-masthead span:first-child { color: var(--accent-color); }
+.edit-btn { position: absolute; top: 20px; right: 48px; z-index: 2; display: flex; align-items: center; gap: 8px; padding: 7px 12px; border: 1px solid var(--line-color); border-radius: 20px; background: var(--profile-surface); color: var(--text-secondary); cursor: pointer; font-size: 12px; }
+.profile-hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 48px; min-height: 0; }
+.profile-info { min-width: 0; }
+h1 { margin: 0; font-family: var(--profile-serif); font-size: clamp(38px, 5vw, 76px); font-weight: 400; line-height: 1.1; letter-spacing: -.025em; overflow-wrap: anywhere; }
+.signature { margin-top: 20px; max-width: 54ch; }
+.signature :deep(.intro-line) { font-family: var(--profile-serif); font-size: 18px; line-height: 1.75; display: grid; }
+.signature :deep(.intro-reserve), .signature :deep(.intro-typed) { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.signature-empty { margin: 20px 0 0; color: var(--text-tertiary); font-family: var(--profile-serif); font-size: 16px; }
+.profile-details { display: flex; flex-wrap: wrap; gap: 12px 24px; margin: 22px 0 0; }
+.profile-details > div { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.profile-details dt { color: var(--text-tertiary); font-size: 11px; flex-shrink: 0; }
+.profile-details dd { margin: 0; color: var(--text-secondary); font-size: 13px; max-width: 16ch; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.profile-avatar { width: clamp(130px, 28dvh, 240px); aspect-ratio: 1; padding: 6px; border: 1px solid var(--line-color); border-radius: 24px; background: var(--profile-surface); box-shadow: 0 24px 48px -34px rgb(0 0 0 / .3); transform: translate(var(--portrait-x, 0px), var(--portrait-y, 0px)); transition: transform 450ms; }
+.profile-avatar :deep(.n-upload), .profile-avatar :deep(.n-upload-trigger) { display: block; width: 100%; height: 100%; }
+.profile-avatar :deep(.n-avatar) { display: block; width: 100% !important; height: 100% !important; border-radius: 18px !important; }
+.profile-avatar :deep(.n-avatar img) { object-fit: contain; }
+.avatar-button { position: relative; display: block; width: 100%; height: 100%; padding: 0; border: 0; border-radius: 18px; background: transparent; cursor: pointer; }
+.avatar-edit-badge { position: absolute; inset: auto 10px 10px; padding: 9px; border-radius: 10px; background: rgb(12 17 26 / .8); color: white; font-size: 10px; letter-spacing: .2em; opacity: 0; transform: translateY(4px); transition: opacity 200ms, transform 200ms; pointer-events: none; }
+.avatar-button:hover .avatar-edit-badge, .avatar-button:focus-visible .avatar-edit-badge { opacity: 1; transform: none; }
+.publications { display: flex; flex-direction: column; min-width: 0; min-height: 0; gap: 16px; }
+.publications > h2 { display: flex; justify-content: space-between; align-items: center; margin: 0; padding: 0 0 12px; border-bottom: 1px solid var(--line-color); font-family: var(--profile-serif); font-size: 21px; line-height: 1; font-weight: 500; flex-shrink: 0; }
+.publications > h2 small { margin-left: 12px; font-size: 11px; font-weight: 400; color: var(--text-tertiary); }
+.page-indicator { font-size: 11px; font-weight: 400; color: var(--text-tertiary); }
+.publication-loading { flex: 1; min-height: 0; }
+.publication-loading :deep(.n-spin-content) { height: 100%; min-height: 0; }
+.publication-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; height: 100%; min-height: 0; }
+.publication-entry { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding-right: 24px; border-right: 1px solid var(--line-color); }
+.publication-entry:last-child { padding-right: 0; border-right: 0; }
+.article-number { display: block; margin-bottom: 10px; color: var(--accent-color); font-family: var(--profile-serif); font-style: italic; font-size: 12px; letter-spacing: .08em; flex-shrink: 0; }
+.publications :deep(.article-card) { display: flex; flex: 1; flex-direction: column; min-height: 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
+.publications :deep(.cover-link) { flex: 0 0 35%; min-height: 0; max-height: 35%; margin-bottom: 12px; border-radius: 8px; }
+.publications :deep(.cover-link:not(:has(.article-cover))) { display: none; }
+.publications :deep(.article-cover) { width: 100%; height: 100%; margin: 0; object-fit: contain; background: var(--bg-secondary); }
+.publications :deep(.article-card h2) { margin-bottom: 6px; font-family: var(--profile-serif); font-size: 18px; font-weight: 600; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.publications :deep(.article-body) { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.publications :deep(.article-heading), .publications :deep(footer) { flex-shrink: 0; }
+.publications :deep(.summary) { flex: 1; min-height: 0; margin-bottom: 8px; font-size: 12px; line-height: 1.65; overflow-wrap: anywhere; -webkit-line-clamp: var(--profile-summary-lines, unset); }
+.publications :deep(.author) { display: none; }
+.publications :deep(footer) { justify-content: flex-start; gap: 8px; }
+.publications :deep(.tags) { flex-shrink: 1; }
+.publications :deep(.tag) { font-size: 10px; padding: 2px 7px; }
+.publications :deep(.metrics) { font-size: 10px; gap: 10px; }
+.publications :deep(.metrics .n-icon) { font-size: 14px; }
+.publications :deep(.meta) { font-size: 10px; }
+.article-open { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding-top: 10px; color: var(--text-secondary); font-size: 11px; text-decoration: none; flex-shrink: 0; }
+.article-open span { font-size: 18px; transition: transform 200ms; }
+.article-open:hover, .article-open:focus-visible { color: var(--accent-color); }
+.article-open:hover span { transform: translate(2px, -2px); }
+.pagination { display: flex; justify-content: flex-end; flex-shrink: 0; min-height: 28px; }
+.empty-state { margin: 0; display: grid; place-items: center; height: 100%; color: var(--text-tertiary); font-size: 14px; }
+.page-error { display: flex; align-items: center; gap: 12px; font-size: 12px; }
+.page-error button { border: 1px solid var(--line-color); border-radius: 8px; padding: 4px 10px; background: var(--profile-surface); color: var(--text-primary); cursor: pointer; }
+.has-background { --profile-surface: #202631; --text-primary: #fafafa; --text-secondary: #e0e2e8; --text-tertiary: #c3c8d2; --line-color: rgb(255 255 255 / .24); --accent-color: #ffb5be; }
+.has-background .publications :deep(.article-cover) { background: rgb(255 255 255 / .06); }
+.has-background .pagination :deep(.n-pagination-item) { color: white; }
+.loaded .profile-info { animation: profile-reveal 650ms ease both; }
+@keyframes profile-reveal { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (max-width:1100px) { .profile-page { padding-inline: 32px; } .edit-btn { right: 32px; } .publication-grid { gap: 16px; } .publication-entry { padding-right: 16px; } }
+@media (max-width:900px) {
+  .profile-page { height: calc(100dvh - 64px); padding: 24px; }
+  .container { grid-template-rows: 24px minmax(140px, .8fr) minmax(220px, 1fr); gap: 16px; }
+  .edit-btn { top: 16px; right: 24px; }
+  .profile-hero { gap: 20px; }
+  .profile-avatar { width: clamp(92px, 18dvh, 150px); }
+  .signature { margin-top: 12px; }
+  .signature :deep(.intro-line) { font-size: 14px; line-height: 1.6; }
+  .publication-grid { grid-template-columns: minmax(0, 1fr); }
+  .publication-entry { padding: 0; border: 0; }
+  .publications :deep(.article-card) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); gap: 18px; align-items: center; }
+  .publications :deep(.cover-link) { max-height: none; height: 100%; margin: 0; }
+  .publications :deep(.article-body) { grid-column: 2; min-width: 0; }
+  .publications :deep(.article-card:not(:has(.article-cover))) { grid-template-columns: minmax(0, 1fr); }
+  .publications :deep(.article-card:not(:has(.article-cover)) .article-body) { grid-column: 1; }
 }
-
-.profile-header {
-  align-items: center;
-}
-
-.profile-avatar {
-  flex-shrink: 0;
-}
-
-.profile-info {
-  flex: 1;
-}
-
-h1 {
-  margin: 0 0 4px;
-  overflow-wrap: anywhere;
-}
-
-.uid {
-  overflow-wrap: anywhere;
-}
-
-.avatar-button {
-  position: relative;
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-}
-
-.avatar-button>.avatar-edit-badge {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  background: var(--accent-color);
-  color: var(--on-accent);
-  border-radius: 50%;
-  width: 28px;
-  height: 28px;
-  display: grid;
-  place-items: center;
-}
-
-.edit-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid var(--line-color);
-  color: var(--text-secondary);
-  border-radius: 24px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.publications h2 {
-  color: var(--text-primary);
-  padding: 0;
-  margin: 0 0 14px;
-}
-
-.publications :deep(.article-card) {
-  margin-bottom: 14px;
-}
-
-.journey-sentinel, .journey-note, .empty-state {
-  padding: 36px;
-  text-align: center;
-  color: var(--text-tertiary);
-  font-size: 13px;
-}
-
+@media (max-height:620px) { .container { grid-template-rows: 24px minmax(110px, .65fr) minmax(180px, 1fr); gap: 12px; } .profile-avatar { width: 100px; } h1 { font-size: 36px; } .signature { margin-top: 10px; } .signature :deep(.intro-line) { font-size: 13px; } .publications { gap: 10px; }  }
+@media (max-height:540px) { .profile-page { padding-block: 16px; } .container { grid-template-rows: 20px minmax(96px, .8fr) minmax(130px, 1fr); gap: 8px; } .profile-avatar { width: 76px; padding: 4px; } .signature :deep(.intro-reserve), .signature :deep(.intro-typed) { -webkit-line-clamp: 1; } .publication-grid { grid-template-columns: minmax(0, 1fr); } .publications :deep(.article-card) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 18px; align-items: center; } .publications :deep(.cover-link) { height: 100%; max-height: none; margin: 0; } .publications :deep(.article-body) { grid-column: 2; } .publications :deep(.article-card:not(:has(.article-cover))) { grid-template-columns: minmax(0, 1fr); } .publications :deep(.article-card:not(:has(.article-cover)) .article-body) { grid-column: 1; } .article-number { display: none; } .article-open { margin-top: 6px; padding-top: 0; } }
+@media (max-width:640px) { .edit-modal-content { padding: 24px; } }
+@media (max-width:900px) { .profile-details { gap: 8px 16px; margin-top: 14px; } .profile-details > div { gap: 6px; } .profile-details dd { font-size: 12px; } }
+@media (max-height:620px) { .profile-details { gap: 6px 16px; margin-top: 10px; } .signature-empty { margin-top: 10px; font-size: 13px; } }
+@media (max-height:540px) { .profile-details { margin-top: 6px; } .profile-details dt, .profile-details dd { font-size: 10px; } h1 { font-size: 32px; } .signature { margin-top: 6px; } }
+@media (max-height:540px) { .publications :deep(.tags) { display: none; } .publications :deep(.article-card h2) { -webkit-line-clamp: 1; font-size: 15px; } .publications > h2 { padding-bottom: 6px; font-size: 15px; } .publications { gap: 6px; } }
+@media (prefers-reduced-motion:reduce) { .loaded .profile-info { animation: none; } .profile-avatar, .avatar-edit-badge, .article-open span { transform: none; transition: none; } }
 .edit-modal-content {
   box-sizing: border-box;
   max-height: calc(100dvh - 48px);
@@ -722,488 +733,5 @@ h1 {
 .save-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-@media (max-width:640px) {
-  .profile-page {
-    padding: 76px 18px 48px;
-  }
-  .profile-header {
-    flex-wrap: wrap;
-    gap: 20px;
-  }
-  h1 {
-    font-size: 24px;
-  }
-  .edit-btn {
-    margin-left: auto;
-  }
-  .edit-modal-content {
-    padding: 24px;
-  }
-}
-
-.publications h2 span {
-  display: inline-block;
-}
-
-.signature {
-  color: var(--text-secondary);
-}
-
-@media (max-width:640px) {
-  .profile-header {
-    padding: 12px 0;
-  }
-  .profile-info {
-    flex-basis: calc(100% - 100px);
-  }
-}
-
-/* Author issue: cover composition, editorial rules and numbered contributions. */
-
-.container {
-  max-width: 1120px;
-}
-
-.profile-masthead {
-  display: flex;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 8px 0 16px;
-  border-bottom: 1px solid var(--text-primary);
-  font-size: 11px;
-  letter-spacing: .2em;
-  color: var(--text-secondary);
-}
-
-.profile-masthead span:first-child {
-  color: var(--accent-color);
-  font-weight: 650;
-}
-
-.profile-header {
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  display: grid;
-  margin-top: 12px;
-  border-bottom: 1px solid color-mix(in srgb, var(--accent-color) 25%, var(--line-color));
-}
-
-.cover-orbit {
-  position: absolute;
-  z-index: -1;
-  pointer-events: none;
-  border: 1px solid color-mix(in srgb, var(--accent-color) 14%, transparent);
-}
-
-.cover-orbit::before, .cover-orbit::after {
-  content: '';
-  position: absolute;
-  border: inherit;
-}
-
-h1 {
-  font-family: var(--font-sans);
-  font-size: clamp(32px, 4vw, 54px);
-  line-height: 1.3;
-  font-weight: 500;
-  letter-spacing: .035em;
-  margin-bottom: 12px;
-}
-
-.uid {
-  color: var(--text-tertiary);
-}
-
-.signature {
-  font-family: var(--font-sans);
-  font-size: 17px;
-  line-height: 1.9;
-  margin-top: 20px;
-  overflow-wrap: anywhere;
-}
-
-.edit-btn {
-  align-self: end;
-  background: var(--bg-primary);
-  border-color: var(--line-color);
-}
-
-.publications h2 {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--text-primary);
-  margin-bottom: 0;
-  font-family: var(--font-sans);
-  font-size: 22px;
-}
-
-.publications h2 span {
-  padding: 0 0 14px;
-  border-bottom: 2px solid var(--accent-color);
-}
-
-.publications h2 small {
-  font-family: var(--font-sans);
-  font-size: 28px;
-  font-weight: 400;
-  color: var(--accent-color);
-}
-
-.publication-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: 36px;
-}
-
-.publication-entry {
-  position: relative;
-  min-width: 0;
-  border-bottom: 1px solid var(--line-color);
-}
-
-.article-number {
-  display: block;
-  font-family: var(--font-sans);
-  line-height: 1;
-  color: var(--accent-color);
-  opacity: .7;
-}
-
-.publications :deep(.article-card) {
-  padding: 0;
-  margin: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-}
-
-.publications :deep(.article-card:hover) {
-  background: transparent;
-}
-
-.publications :deep(.article-heading) {
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.publications :deep(.article-card h2) {
-  display: block;
-  border: 0;
-  font-family: var(--font-sans);
-  line-height: 1.5;
-  margin: 0;
-}
-
-.publications :deep(.summary) {
-  line-height: 1.8;
-}
-
-.publication-grid > :is(.journey-sentinel, .journey-note) {
-  grid-column: 1 / -1;
-}
-
-@media (max-width:760px) {
-  .edit-btn {
-    grid-column: 2;
-    justify-self: start;
-    margin-left: 0;
-  }
-}
-
-@media (max-width:480px) {
-  .profile-avatar {
-    margin-bottom: 4px;
-  }
-  .profile-info {
-    width: 100%;
-  }
-  h1 {
-    font-size: 36px;
-  }
-}
-
-/* Personal introduction: portrait, greeting and a reserved typewriter line. */
-
-.profile-header {
-  grid-template-columns: 220px minmax(0, 1fr);
-  grid-template-rows: auto;
-  height: auto;
-  min-height: 360px;
-  padding: 44px;
-  gap: 20px 44px;
-  align-content: center;
-  border-radius: 20px;
-  background: linear-gradient(120deg, var(--bg-primary), color-mix(in srgb, var(--accent-soft) 55%, var(--bg-primary)));
-}
-
-.cover-orbit {
-  width: 520px;
-  height: 520px;
-  top: -250px;
-  right: -140px;
-  transform: rotate(-20deg);
-  border-radius: 36px;
-  opacity: .7;
-}
-
-.cover-orbit::before, .cover-orbit::after {
-  border-radius: 24px;
-  inset: 40px;
-}
-
-.cover-orbit::after {
-  inset: 90px;
-}
-
-.profile-info {
-  grid-column: 2;
-  grid-row: 1;
-  align-self: center;
-  padding: 0;
-  min-width: 0;
-}
-
-.profile-info h1 {
-  margin: 0 0 12px;
-  font-size: clamp(32px, 4vw, 52px);
-  line-height: 1.25;
-  font-weight: 650;
-  letter-spacing: -.025em;
-  overflow-wrap: anywhere;
-}
-
-.greeting {
-  display: block;
-  margin-bottom: 10px;
-  font-size: 17px;
-  font-weight: 400;
-  letter-spacing: .04em;
-  color: var(--text-secondary);
-}
-
-.profile-name {
-  display: block;
-}
-
-.signature {
-  margin: 20px 0 0;
-  max-width: none;
-}
-
-.uid {
-  margin: 10px 0 0;
-  font-size: 11px;
-  letter-spacing: .06em;
-}
-
-.profile-avatar {
-  grid-column: 1;
-  grid-row: 1;
-  align-self: center;
-  position: relative;
-  width: 220px;
-  height: 220px;
-  min-height: 0;
-  padding: 6px;
-  border-radius: 36px;
-  border: 1px solid color-mix(in srgb, var(--accent-color) 25%, var(--line-color));
-  background: var(--bg-primary);
-  box-shadow: 0 20px 48px -30px color-mix(in srgb, var(--accent-color) 40%, transparent);
-  overflow: hidden;
-}
-
-.profile-avatar :deep(.n-upload), .profile-avatar :deep(.n-upload-trigger) {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-.avatar-button {
-  display: block;
-  width: 100%;
-  height: 100%;
-  padding: 0;
-  border-radius: 30px;
-  overflow: hidden;
-}
-
-.profile-avatar :deep(.n-avatar) {
-  display: block;
-  width: 100% !important;
-  height: 100% !important;
-  min-height: 0;
-  border-radius: 30px !important;
-  transform: translate(var(--portrait-x, 0px), var(--portrait-y, 0px)) scale(1.035);
-  transition: transform 650ms cubic-bezier(.2,.75,.25,1);
-}
-
-.profile-avatar :deep(.n-avatar img) {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.profile-avatar::after {
-  content: '';
-  position: absolute;
-  inset: 6px;
-  pointer-events: none;
-  border-radius: 30px;
-  background: radial-gradient(circle at var(--light-x, 50%) var(--light-y, 30%), rgb(255 255 255 / .2), transparent 65%);
-  opacity: .2;
-  transition: opacity 500ms;
-}
-
-.profile-header:hover .profile-avatar::after {
-  opacity: 1;
-}
-
-.avatar-button > .avatar-edit-badge {
-  right: 12px;
-  bottom: 12px;
-  z-index: 2;
-}
-
-.edit-btn {
-  position: absolute;
-  top: 20px;
-  right: 28px;
-  z-index: 2;
-  margin: 0;
-  font-size: 12px;
-  padding: 9px 14px;
-}
-
-.profile-page.loaded .profile-avatar {
-  animation: portrait-reveal 850ms cubic-bezier(.16,1,.3,1) both;
-}
-
-.profile-page.loaded .profile-info {
-  animation: portrait-reveal 850ms 100ms cubic-bezier(.16,1,.3,1) both;
-}
-
-@keyframes portrait-reveal {
-  from {
-    opacity: 0;
-    transform: translateY(14px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-.publications {
-  margin-top: 30px;
-}
-
-.publication-grid {
-  gap: 18px;
-  padding-top: 22px;
-}
-
-.publication-entry {
-  grid-column: auto;
-  display: block;
-  padding: 24px;
-  border: 1px solid var(--line-color);
-  border-radius: 14px;
-  background: var(--bg-primary);
-  transition: transform 250ms, border-color 250ms, box-shadow 250ms;
-}
-
-.publication-entry:hover {
-  transform: translateY(-3px);
-  border-color: color-mix(in srgb, var(--accent-color) 30%, var(--line-color));
-  box-shadow: 0 12px 24px -20px color-mix(in srgb, var(--accent-color) 30%, transparent);
-}
-
-.article-number {
-  font-size: 13px;
-  font-style: normal;
-  letter-spacing: .1em;
-  margin-bottom: 18px;
-}
-
-.publications :deep(.article-card h2) {
-  font-size: 21px;
-  font-weight: 600;
-}
-
-.publications :deep(.article-heading) {
-  display: block;
-}
-
-.publications :deep(.summary) {
-  margin-bottom: 20px;
-  font-size: 14px;
-}
-
-@media (max-width:760px) {
-  .profile-header {
-    grid-template-columns: 150px minmax(0, 1fr);
-    min-height: 300px;
-    padding: 28px;
-    gap: 18px 24px;
-  }
-  .profile-avatar {
-    width: 150px;
-    height: 150px;
-    border-radius: 28px;
-  }
-  .profile-avatar :deep(.n-avatar), .avatar-button, .profile-avatar::after {
-    border-radius: 22px !important;
-  }
-  .publication-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-@media (max-width:480px) {
-  .profile-header {
-    grid-template-columns: minmax(0, 1fr);
-    padding: 28px 24px;
-    gap: 24px;
-  }
-  .profile-avatar {
-    grid-column: 1;
-    grid-row: 1;
-    width: 156px;
-    height: 156px;
-  }
-  .profile-info {
-    grid-column: 1;
-    grid-row: 2;
-  }
-  .profile-info h1 {
-    font-size: 36px;
-  }
-  .signature {
-    margin-top: 16px;
-  }
-  .publication-entry {
-    padding: 20px;
-  }
-}
-
-@media (prefers-reduced-motion:reduce) {
-  .profile-page.loaded .profile-avatar, .profile-page.loaded .profile-info {
-    animation: none;
-  }
-  .profile-avatar :deep(.n-avatar) {
-    transform: none;
-    transition: none;
-  }
-  .profile-avatar::after, .publication-entry {
-    transition: none;
-  }
-  .publication-entry:hover {
-    transform: none;
-  }
 }
 </style>

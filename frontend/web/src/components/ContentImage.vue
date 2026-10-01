@@ -29,8 +29,9 @@ function onError() {
 .content-image {
   display: block;
   width: 100%;
-  aspect-ratio: 16 / 9;
-  object-fit: cover;
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
   background: var(--bg-secondary);
 }
 </style>

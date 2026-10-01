@@ -39,8 +39,9 @@ defineProps<{ blog: BlogPublicBriefVO; layout?: 'archive' }>()
 .archive-card .article-body { grid-area: 1 / 1; padding-right: 64px; }
 .archive-card:has(.article-cover) { grid-template-columns: minmax(0, 1fr) 36%; }
 .archive-card:has(.article-cover) .article-body { padding-right: 16px; }
-.archive-card .cover-link { grid-column: 2; grid-row: 1; align-self: stretch; position: relative; min-height: 144px; border-radius: 0; mask-image: linear-gradient(to right, transparent, #000 45%); }
-.archive-card .article-cover { position: absolute; inset: 0; height: 100%; aspect-ratio: auto; border-radius: 0; margin: 0; }
+.archive-card .cover-link { grid-column: 2; grid-row: 1; position: relative; min-width: 0; padding-right: 56px; border-radius: 0; }
+.archive-card .cover-link::after { content: ''; position: absolute; inset: 0 56px 0 0; pointer-events: none; background: linear-gradient(to right, var(--bg-primary), transparent 12%); }
+.archive-card .article-cover { height: 160px; object-fit: contain; border-radius: 0; margin: 0; background: transparent; }
 .archive-card footer { justify-content: flex-start; gap: 10px 14px; }
 .archive-card .tags { flex-shrink: 1; }
 .archive-card .tag { padding: 2px 7px; font-size: 10px; }
@@ -50,8 +51,10 @@ defineProps<{ blog: BlogPublicBriefVO; layout?: 'archive' }>()
 .archive-card:hover .archive-open, .archive-open:focus-visible { transform: translate(4px, -50%); color: var(--accent-color); border-color: var(--accent-color); }
 .archive-open .n-icon { font-size: 20px; }
 @media(max-width:640px) {
-  .archive-card:has(.article-cover) { grid-template-columns: minmax(0, 1fr) 28%; }
-  .archive-card .cover-link { min-height: 156px; }
+  .archive-card:has(.article-cover) { grid-template-columns: minmax(0, 1fr) 32%; }
+  .archive-card .cover-link { padding-right: 0; padding-bottom: 38px; }
+  .archive-card .cover-link::after { inset: 0 0 38px; }
+  .archive-card .article-cover { height: 110px; }
   .archive-open { right: 4px; width: 34px; height: 34px; }
   .archive-card .article-body { padding-right: 46px; }
   .archive-card:has(.article-cover) .article-body { padding-right: 0; }
