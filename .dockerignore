@@ -30,6 +30,12 @@ LICENSE
 
 # ---------- 隐私与本地文件 ----------
 secret.txt
+# Auth 密钥及本地凭据仅在运行时挂载，不发送到镜像构建上下文。
+backend/auth/.local/
+*.p12
+*.pfx
+*.jks
+infra/docker/backend/.auth.env
 *.env
 *.env.*
 !.env.example

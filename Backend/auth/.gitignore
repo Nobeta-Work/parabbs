@@ -1,0 +1,7 @@
+/target/
+/.local/
+*.p12
+*.jks
+*.pem
+.env
+application-local.yml

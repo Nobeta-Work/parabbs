@@ -3,8 +3,9 @@
 # 隐私与本地文件
 secret.txt
 *.env
-*.env.*
 !.env.example
+!.auth.env.example
+infra/docker/backend/.auth.env
 tmp/
 
 # 系统/编辑器/ AI

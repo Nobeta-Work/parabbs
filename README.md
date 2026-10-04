@@ -10,7 +10,7 @@
 <a href="https://www.java.com/zh-CN/"><img src="https://img.shields.io/badge/Java-17%2B-orange" alt="Java 17+"/></a>
 </div>
 
-彼记（Para BBS）是一个基于 Java 后端开发学习链路，不断更新、迭代、维护的云笔记/论坛项目。
+彼记（Para BBS）是一个基于后端开发学习链路，不断更新、迭代、维护的云笔记/论坛项目。
 
 以 "实现为先，迭代最佳"、"框架优先，复用轮子" 为代码开发标准，尽可能保持项目代码的质量。
 
@@ -32,7 +32,9 @@
 
 ## 功能模块
 
-Java 端主要模块包括：
+***auth*** 后端模块为 SSO 认证中心。
+
+***bbs*** 后端为 BBS 业务应用端，主要包括：
 
 - `auth`：登录、注册、刷新令牌、退出登录
 - `user`：用户资料、头像、个人主页
@@ -64,9 +66,9 @@ cd backend/bbs
 
 ## 页面展示
 
-![Index 前端页面](https://raw.githubusercontent.com/Nobeta-Work/faramita-bbs-file/main/img/b66debed-51a2-4514-84e8-3eee5acdae2f.png)
-![Index 前端页面 (暗主题)](https://raw.githubusercontent.com/Nobeta-Work/faramita-bbs-file/main/img/b0c9c1aa-9814-4765-aea0-8b79ee9d824e.png)
-![Public 博客评论页面](https://raw.githubusercontent.com/Nobeta-Work/faramita-bbs-file/main/img/0406ddc5-d9a3-4d0f-b32e-a8b3ba79a5ad.png)
+![Index 前端页面](https://nobeta.cn/i/2026/10/03/be6c55.webp)
+![Profile 个人主页](https://nobeta.cn/i/2026/10/03/a1cd15.webp)
+![Public 博客页面](https://nobeta.cn/i/2026/10/03/a8b1b6.webp)
 
 ## 贡献
 

@@ -8,7 +8,7 @@ WORKDIR /app
 
 COPY infra/docker/backend/bbs.jar bbs.jar
 
-VOLUME /data/parabbs/avatar
+VOLUME /data/parabbs/images
 
 EXPOSE 8080
 
@@ -22,5 +22,5 @@ CMD [ "java", "-jar", "bbs.jar" ]
 # 3. 运行容器 (在项目根目录执行) :
 #   docker run -d \
 #       -p 8080:8080 \
-#       -v /data/parabbs/avatar:/data/parabbs/avatar \
+#       -v /data/parabbs/images:/data/parabbs/images \
 #       --name parabbs

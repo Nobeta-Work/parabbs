@@ -1,0 +1,50 @@
+server:
+  port: ${AUTH_PORT:9000}
+  servlet:
+    context-path: /auth
+    session:
+      timeout: 30m
+      cookie:
+        name: AUTH_SESSION
+        path: /auth
+        http-only: true
+        secure: ${AUTH_SECURE_COOKIES:true}
+        same-site: lax
+  # Set NATIVE or FRAMEWORK only behind a proxy that strips untrusted forwarding headers.
+  forward-headers-strategy: ${AUTH_FORWARD_HEADERS_STRATEGY:NONE}
+spring:
+  application:
+    name: para-auth
+  datasource:
+    url: ${AUTH_DB_URL:jdbc:mysql://localhost:3306/para_auth?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true}
+    username: ${AUTH_DB_USERNAME}
+    password: ${AUTH_DB_PASSWORD}
+  data:
+    redis:
+      host: ${AUTH_REDIS_HOST:localhost}
+      port: ${AUTH_REDIS_PORT:6379}
+      username: ${AUTH_REDIS_USERNAME:}
+      password: ${AUTH_REDIS_PASSWORD:}
+      database: ${AUTH_REDIS_DATABASE:0}
+  session:
+    redis:
+      repository-type: indexed
+      namespace: para:auth:session
+  jackson:
+    time-zone: UTC
+mybatis:
+  configuration:
+    map-underscore-to-camel-case: true
+auth:
+  issuer: ${AUTH_ISSUER:https://nobeta.cn/auth}
+  allow-local-http: ${AUTH_ALLOW_LOCAL_HTTP:false}
+  registration-enabled: ${AUTH_REGISTRATION_ENABLED:true}
+  keys:
+    location: ${AUTH_KEYSTORE_LOCATION}
+    store-password: ${AUTH_KEYSTORE_PASSWORD}
+    key-password: ${AUTH_KEY_PASSWORD:${AUTH_KEYSTORE_PASSWORD}}
+    active-alias: ${AUTH_SIGNING_KEY_ALIAS:auth-signing}
+  bootstrap:
+    enabled: ${AUTH_BOOTSTRAP_ENABLED:false}
+    username: ${AUTH_BOOTSTRAP_USERNAME:}
+    password: ${AUTH_BOOTSTRAP_PASSWORD:}

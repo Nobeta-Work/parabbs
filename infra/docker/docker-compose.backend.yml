@@ -4,7 +4,7 @@ services:
   backend:
     build:
       context: ../..
-      dockerfile: infra/docker/backend/Dockerfile
+      dockerfile: infra/docker/backend/bbs.Dockerfile
     image: parabbs-backend
     container_name: parabbs-backend
     ports:
@@ -12,13 +12,45 @@ services:
     volumes:
       - ../../backend/resources/data/avatar:/data/parabbs/avatar
     env_file:
-      - backend/.env
+      - backend/.bbs.env
+    restart: unless-stopped
+
+  auth:
+    build:
+      context: ../..
+      dockerfile: infra/docker/backend/auth.Dockerfile
+    image: para-auth
+    container_name: para-auth
+    ports:
+      - "9000:9000"
+    env_file:
+      - backend/.auth.env
+    # 本文件不启动 MySQL/Redis，默认通过宿主机已开放的端口连接。
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - type: bind
+        source: ../../backend/auth/.local/auth-signing.p12
+        target: /run/secrets/auth-signing.p12
+        read_only: true
+        bind:
+          # 密钥缺失时直接报错，避免自动创建同名目录。
+          create_host_path: false
     restart: unless-stopped
 
 # # 部署流程
-# 1. 打包 JAR 并迁移 (在 backend/bbs/ 目录执行) :
+# 1. 打包 BBS JAR 并复制 (在 backend/bbs/ 目录执行) :
 #   ./mvnw clean package -DskipTests && cp target/bbs.jar ../../infra/docker/backend/
-# 2. 准备环境变量 (在项目根目录执行) :
-#   cp infra/docker/backend/.env.example infra/docker/backend/.env
-# 3. 启动 (在项目根目录执行) :
+# 2. 打包 Auth JAR 并复制 (在 backend/auth/ 目录执行，使用已安装的 Maven) :
+#   mvn clean package -DskipTests
+#   cp target/auth.jar ../../infra/docker/backend/auth.jar
+# 3. 准备环境变量 (在项目根目录执行，并填写真实值) :
+#   cp infra/docker/backend/.bbs.env.example infra/docker/backend/.bbs.env
+#   cp infra/docker/backend/.auth.env.example infra/docker/backend/.auth.env
+# 4. 准备 Auth 密钥文件及密码；数据库按 infra/mysql/auth_schema.sql 手动建表。
+#   默认密钥位置：backend/auth/.local/auth-signing.p12。
+#   .auth.env 的密码须与该文件一致，密钥位置填写容器内的 /run/secrets 路径。
+#   确保 MySQL/Redis 可由容器访问；HTTPS 及可信转发头由外部反向代理配置。
+# 5. 启动 (在项目根目录执行) :
 #   docker compose -f infra/docker/docker-compose.backend.yml up -d
+#   只启动认证中心时，在命令末尾增加 auth。
