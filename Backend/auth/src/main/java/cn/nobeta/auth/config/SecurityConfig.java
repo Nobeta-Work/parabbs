@@ -165,8 +165,15 @@ public class SecurityConfig {
                         .requestMatchers("/api/admin/**").hasRole("AUTH_ADMIN") // 要求 ROLE_AUTH_ADMIN 权限；hasRole 自动添加 ROLE_ 前缀。
                         .requestMatchers("/api/accounts/me", "/api/accounts/me/password").authenticated() // 当前账号查询和修改密码要求有效登录身份。
                         .anyRequest().denyAll()) // 拒绝没有被上述规则明确允许的其他请求。
-                .formLogin(Customizer.withDefaults()) // 启用默认登录页及表单登录；POST /login 由框架过滤器认证，无需登录 Controller。
-                .logout(logout -> logout.logoutSuccessUrl("/login?logout")) // 普通会话退出成功后跳转登录页，与 OIDC /connect/logout 分属不同配置。
+                .formLogin(login -> login // 使用前端登录页，账号密码认证仍交给框架过滤器。
+                        .loginPage("/login") // GET /auth/login 由同源前端提供，不生成默认登录页。
+                        .loginProcessingUrl("/api/login") // POST /auth/api/login 接收原生表单，与页面路径分离。
+                        .failureUrl("/login?error") // 认证失败后返回前端登录页。
+                        .defaultSuccessUrl("/account", false) // 优先恢复保存的授权请求，否则进入前端账号页。
+                        .permitAll()) // 允许匿名访问登录入口，仍保留 CSRF 校验。
+                .logout(logout -> logout // 普通会话退出与 OIDC /connect/logout 分属不同配置。
+                        .logoutUrl("/api/logout") // POST /auth/api/logout 处理退出，GET /auth/logout 是前端确认页。
+                        .logoutSuccessUrl("/login?logout")) // 退出后返回前端登录页。
                 .exceptionHandling(exceptions -> exceptions // 配置未认证及访问拒绝时的响应。
                         .defaultAuthenticationEntryPointFor((request, response, exception) -> { // 定义下方 API 匹配器对应的未认证请求处理器。
                             response.setStatus(401); // 401 表示请求缺少有效认证身份。

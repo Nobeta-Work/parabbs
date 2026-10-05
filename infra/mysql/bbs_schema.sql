@@ -1,6 +1,8 @@
 /**
+ * name: Para BBS Schema SQL
+ * db: para_bbs
  * version: v0.5.1
- * 完整数据库sql脚本，与迁移无关
+ * description: Full schema of para_bbs. Including initial role, user, and permissions.
  */
 
 CREATE DATABASE IF NOT EXISTS `para_bbs`

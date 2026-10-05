@@ -1,5 +1,9 @@
--- Protocol columns follow Spring Authorization Server 1.5.2 JDBC schemas.
--- Additional unique/query indexes are local constraints, not protocol extensions.
+/**
+ * name: Para Auth Schema SQL
+ * db: para_auth
+ * version: v0.5.2
+ * description: Full schema of para_auth.
+ */
 CREATE TABLE auth_account (
     id BIGINT NOT NULL AUTO_INCREMENT,
     subject CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
