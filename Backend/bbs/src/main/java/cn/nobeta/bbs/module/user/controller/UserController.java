@@ -21,7 +21,6 @@ import cn.nobeta.bbs.common.annotation.RateLimit;
 import cn.nobeta.bbs.common.enums.Scene;
 import cn.nobeta.bbs.common.result.Result;
 import cn.nobeta.bbs.module.auth.dto.UserAuthInfo;
-import cn.nobeta.bbs.module.user.dto.PasswordEditDTO;
 import cn.nobeta.bbs.module.user.dto.UserProfileDTO;
 import cn.nobeta.bbs.module.user.service.UserService;
 import cn.nobeta.bbs.module.user.vo.AvatarVO;
@@ -90,27 +89,6 @@ public class UserController {
         Long userId = loginUser.getUser().getId();
 
         userService.editUserProfile(userId, userProfileDTO);
-
-        return Result.success();
-    }
-
-    /**
-     * 用户更新密码接口
-     * @param loginUser
-     * @param passwordEditDTO
-     * @return
-     */
-    @RateLimit(scene = Scene.WRITE)
-    @AuditLog(message = "更新当前用户密码", data = "{'username': #p0.username}")
-    @PutMapping("/me/password")
-    public Result<Void> editUserPassword(
-        @AuthenticationPrincipal UserAuthInfo loginUser,
-        @Valid @RequestBody PasswordEditDTO passwordEditDTO
-    ) {
-
-        Long userId = loginUser.getUser().getId();
-
-        userService.editUserPassword(userId, passwordEditDTO);
 
         return Result.success();
     }

@@ -1,13 +1,10 @@
-import { login as authLogin, register as authRegister } from '@/api/auth'
+import { openAccountPage } from '@/api/auth'
 import type {
     AvatarVO,
-    LoginDTO,
-    PasswordEditDTO,
     UserInfo,
     UserInfoVO,
     UserProfileDTO,
     UserProfileVO,
-    UserSex,
 } from '@/types'
 import request from '@/utils/request'
 
@@ -64,12 +61,8 @@ export function updateCurrentUserProfile(data: UserProfileDTO): Promise<void> {
     })
 }
 
-export function updateUserPassword(data: PasswordEditDTO): Promise<void> {
-    return request<void>({
-        url: '/users/me/password',
-        method: 'put',
-        data,
-    })
+export function openPasswordSettings(): Promise<void> {
+    return openAccountPage('password')
 }
 
 export function updateCurrentUserAvatar(file: File): Promise<AvatarVO> {
@@ -80,38 +73,6 @@ export function updateCurrentUserAvatar(file: File): Promise<AvatarVO> {
         url: '/users/me/avatar',
         method: 'post',
         data: formData,
-    })
-}
-
-// Legacy exports kept for current pages until Phase 2 rewires views.
-export async function login(data: LoginDTO): Promise<UserInfo> {
-    const token = await authLogin(data)
-
-    return {
-        id: null,
-        username: data.username,
-        nickname: null,
-        avatarUrl: null,
-        token: token.accessToken,
-        refreshToken: token.refreshToken,
-        tokenExpireIn: token.expireIn,
-        roles: [],
-    }
-}
-
-export function register(data: {
-    username: string
-    password: string
-    nickname: string
-    sex: number
-    race: string
-}): Promise<void> {
-    return authRegister({
-        username: data.username,
-        password: data.password,
-        nickname: data.nickname,
-        sex: data.sex as UserSex,
-        race: data.race,
     })
 }
 

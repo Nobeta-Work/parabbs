@@ -1,10 +1,38 @@
 # 服务器配置
 server:
-  port: 8080
+  port: ${BBS_PORT:8080}
+  forward-headers-strategy: ${BBS_FORWARD_HEADERS_STRATEGY:NONE}
   servlet:
     context-path: /bbs
+    session:
+      timeout: 10m
+      cookie:
+        name: BBS_SSO_SESSION
+        path: /bbs/api/auth/sso
+        http-only: true
+        secure: ${BBS_SECURE_COOKIES:true}
+        same-site: lax
 
 spring:
+  security:
+    oauth2:
+      client:
+        registration:
+          auth:
+            provider: auth
+            client-id: ${BBS_AUTH_CLIENT_ID}
+            client-secret: ${BBS_AUTH_CLIENT_SECRET}
+            client-authentication-method: client_secret_basic
+            authorization-grant-type: authorization_code
+            redirect-uri: ${BBS_OIDC_REDIRECT_URI:https://nobeta.cn/bbs/api/auth/sso/callback/auth}
+            scope: openid
+        provider:
+          auth:
+            issuer-uri: ${para.sso.issuer}
+  session:
+    store-type: redis
+    redis:
+      namespace: para:bbs:sso:session
   # 运行环境配置
   profiles:
     active: dev
@@ -91,6 +119,9 @@ pagehelper:
   support-methods-arguments: true
 
 para:
+  sso:
+    issuer: ${BBS_AUTH_ISSUER:https://nobeta.cn/auth}
+    callback-page: /bbs/login/callback
   # 文件存储位置
   file:
     managed:

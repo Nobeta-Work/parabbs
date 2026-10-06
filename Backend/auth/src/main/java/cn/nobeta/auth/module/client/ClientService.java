@@ -137,8 +137,9 @@ public class ClientService {
                 .redirectUris(values -> { values.clear(); values.addAll(request.redirectUris()); })
                 .postLogoutRedirectUris(values -> { values.clear(); values.addAll(request.postLogoutRedirectUris()); })
                 .scopes(values -> { values.clear(); values.addAll(request.scopes()); })
-                // 当前注册的是机密客户端，沿用框架默认的可选 PKCE 配置。
+                // 机密客户端可以按注册配置要求 PKCE；不额外限定挑战算法。
                 .clientSettings(ClientSettings.builder()
+                        .requireProofKey(request.requireProofKey())
                         .requireAuthorizationConsent(request.requireAuthorizationConsent()).setting(ENABLED, enabled).build())
                 .tokenSettings(TokenSettings.builder()
                         .authorizationCodeTimeToLive(Duration.ofSeconds(request.authorizationCodeTimeToLive()))

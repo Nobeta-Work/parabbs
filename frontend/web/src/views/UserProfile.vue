@@ -7,7 +7,7 @@ import {
 import {
   PencilOutline, CloseOutline, Person
 } from '@vicons/ionicons5'
-import { getUserInfo, updateCurrentUserAvatar, updateCurrentUserProfile } from '@/api/user'
+import { getUserInfo, updateCurrentUserAvatar, updateCurrentUserProfile, openPasswordSettings } from '@/api/user'
 import { getPublicBlogPage } from '@/api/blog'
 import { resolveAvatarUrl } from '@/utils/avatar'
 import { DateUtils } from '@/types/date'
@@ -21,6 +21,11 @@ import ManagedImageField from '@/components/ManagedImageField.vue'
 const route = useRoute()
 const userStore = useUserStore()
 const message = useMessage()
+
+async function managePassword() {
+  try { await openPasswordSettings() }
+  catch { message.error('无法打开账号密码设置，请重试') }
+}
 
 const uid = computed(() => String(route.params.uid || ''))
 const isCurrentUser = computed(() => String(userStore.userInfo?.id ?? '') === uid.value)
@@ -384,6 +389,7 @@ onUnmounted(() => {
       <div class="edit-modal-content">
         <div class="modal-header">
           <h3>编辑资料</h3>
+          <button type="button" class="text-btn" @click="managePassword">账号密码设置</button>
           <button class="close-btn" aria-label="关闭" :disabled="saving || backgroundUploading" @click="showEditModal = false">
             <n-icon size="24">
 <CloseOutline />

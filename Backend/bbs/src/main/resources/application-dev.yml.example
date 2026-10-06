@@ -1,8 +1,8 @@
 para:
   jwt:
-    secret: thisIsASecure256BitKeyForHmacSha256Algorithm
-    access-token-expire: 864000000 # 10天
-    refresh-token-expire: 864000000 # 10天
+    secret: ${PARA_JWT_SECRET}
+    access-token-expire: ${PARA_JWT_ACCESS_TOKEN_EXPIRE:900} # 单位秒，15分钟
+    refresh-token-expire: ${PARA_JWT_REFRESH_TOKEN_EXPIRE:604800} # 单位秒，7天
   file:
     managed:
       root-path: D:/Education/Project/Para BBS/Backend/resources/data/

@@ -30,13 +30,6 @@ public interface UserMapper {
     void insertUserProfile(UserProfile profile);
 
     /**
-     * 更新指定用户的密码
-     * @param userId
-     * @param password
-     */
-    void updateUserPassword(@Param("userId") Long userId, @Param("password") String password);
-
-    /**
      * 根据 id 修改用户个人资料
      * @param userId
      * @param profileDTO

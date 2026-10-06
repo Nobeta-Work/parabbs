@@ -1,4 +1,3 @@
-import type { TokenVO } from '@/types'
 import type {
   AdminBlogPageQuery,
   AdminBlogStatusDTO,
@@ -22,19 +21,6 @@ import type {
 } from '@/types'
 import { normalizePageResult } from '@/utils/page'
 import request from '@/utils/request'
-
-export interface AdminLoginDTO {
-  username: string
-  password: string
-}
-
-export function adminLogin(data: AdminLoginDTO): Promise<TokenVO> {
-  return request<TokenVO>({
-    url: '/admin/login',
-    method: 'post',
-    data,
-  })
-}
 
 export async function getAdminUserPage(query: AdminUserPageQuery): Promise<PageResult<AdminUserVO>> {
   const page = await request<PageResult<AdminUserVO>>({

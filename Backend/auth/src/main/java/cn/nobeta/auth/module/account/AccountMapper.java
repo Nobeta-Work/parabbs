@@ -30,6 +30,25 @@ public interface AccountMapper {
     @Insert("INSERT INTO auth_account_role(account_id, role_code) VALUES(#{id}, #{role})")
     void insertRole(@Param("id") long id, @Param("role") String role);
 
+    @Delete("DELETE FROM auth_account_role WHERE account_id = #{id}")
+    void deleteRoles(long id);
+
+    @Select("SELECT account_id FROM auth_account_role WHERE role_code = 'ROLE_AUTH_ADMIN' ORDER BY account_id FOR UPDATE")
+    List<Long> lockAdministrators();
+
+    @Select("SELECT COUNT(*) FROM auth_account a JOIN auth_account_role r ON r.account_id = a.id WHERE r.role_code = 'ROLE_AUTH_ADMIN' AND a.status = 1")
+    long enabledAdministratorCount();
+
+    @Select("SELECT * FROM auth_account WHERE id = #{id} FOR UPDATE")
+    Account lockAccount(long id);
+
+    @Select("<script>SELECT * FROM auth_account <where><if test='query != null'>LOCATE(#{query}, username) &gt; 0</if><if test='status != null'>AND status = #{status}</if></where> ORDER BY id LIMIT #{limit} OFFSET #{offset}</script>")
+    List<Account> search(@Param("query") String query, @Param("status") Integer status,
+            @Param("limit") int limit, @Param("offset") long offset);
+
+    @Select("<script>SELECT COUNT(*) FROM auth_account <where><if test='query != null'>LOCATE(#{query}, username) &gt; 0</if><if test='status != null'>AND status = #{status}</if></where></script>")
+    long searchCount(@Param("query") String query, @Param("status") Integer status);
+
     @Select("SELECT * FROM auth_account ORDER BY id LIMIT #{limit} OFFSET #{offset}")
     List<Account> page(@Param("limit") int limit, @Param("offset") long offset);
 

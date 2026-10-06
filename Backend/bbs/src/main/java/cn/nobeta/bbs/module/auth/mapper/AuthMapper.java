@@ -12,13 +12,6 @@ public interface AuthMapper {
 
 
     /**
-     * 根据用户名查询用户认证信息
-     * @param username
-     * @return
-     */
-    User selectAuthUserByUsername(@Param("username") String username);
-
-    /**
      * 根据用户 id 查询角色码
      * @param userId
      * @return

@@ -1,5 +1,7 @@
 package cn.nobeta.auth.security;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -13,6 +15,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 /** Refresh cookie-session authorities and account status, leaving bearer/client authentication alone. */
 public final class AccountSessionFilter extends OncePerRequestFilter {
+    private static final Logger log = LoggerFactory.getLogger(AccountSessionFilter.class);
     private final AccountDetailsService details;
     public AccountSessionFilter(AccountDetailsService details) { this.details = details; }
 
@@ -28,7 +31,8 @@ public final class AccountSessionFilter extends OncePerRequestFilter {
                 refreshed.setDetails(authentication.getDetails());
                 SecurityContextHolder.getContext().setAuthentication(refreshed);
             } catch (UsernameNotFoundException exception) {
-                if (request.getSession(false) != null) request.getSession(false).invalidate();
+                log.warn("Account session invalidated subject={} reason=missing_or_disabled", authentication.getName());
+        if (request.getSession(false) != null) request.getSession(false).invalidate();
                 SecurityContextHolder.clearContext();
             }
         }

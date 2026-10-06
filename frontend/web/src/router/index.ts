@@ -79,6 +79,12 @@ const routes: Array<RouteRecordRaw> = [
             }
         ]
     },
+    {
+        path: '/login/callback',
+        name: 'SsoCallback',
+        component: () => import('@/views/SsoCallbackView.vue'),
+        meta: { requiresAuth: false, title: '正在登录' },
+    },
     // 登录页面
     {
         path: '/login',
@@ -139,7 +145,7 @@ router.beforeEach(async (to, _, next) => {
 
     // 如果有 token 但没有用户信息，说明是刷新页面，需要重新获取用户信息。
     // 公共页面不能因为 /users/me 暂时失败就清空刚登录写入的 token。
-    if (userStore.token && !userStore.userInfo) {
+    if (to.name !== 'SsoCallback' && userStore.token && !userStore.userInfo) {
         try {
             await userStore.fetchUserInfo(requiresAuth)
         } catch (error) {
@@ -148,7 +154,7 @@ router.beforeEach(async (to, _, next) => {
     }
 
     if (requiresAuth && !userStore.isAuthenticated) {
-        next('/login')
+        next({ path: to.path.startsWith('/admin') ? '/admin/login' : '/login', query: { redirect: to.fullPath } })
     } else if (requiredRoles.length > 0 && !userStore.hasAnyRole(requiredRoles)) {
         next(to.path.startsWith('/admin') ? '/admin/login' : '/')
     } else {

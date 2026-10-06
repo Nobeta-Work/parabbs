@@ -18,6 +18,11 @@ import org.springframework.security.oauth2.server.authorization.token.*;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
+import org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler;
+import org.springframework.security.web.authentication.SimpleUrlAuthenticationFailureHandler;
+import org.springframework.security.web.savedrequest.HttpSessionRequestCache;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.web.util.matcher.*;
 
 /**
@@ -25,6 +30,22 @@ import org.springframework.security.web.util.matcher.*;
  */
 @Configuration
 public class SecurityConfig {
+    private static final Logger log = LoggerFactory.getLogger(SecurityConfig.class);
+
+    /** Log outside Security so authentication and CSRF failures are visible too. */
+    @Bean FilterRegistrationBean<AuthRequestLogFilter> authRequestLogging() {
+        var registration = new FilterRegistrationBean<>(new AuthRequestLogFilter());
+        registration.setOrder(-101); // Spring Session has already run; Boot's default Security order is -100.
+        return registration;
+    }
+
+    /** Only browser authorization requests may become the post-login destination. */
+    @Bean HttpSessionRequestCache authorizationRequestCache() {
+        var cache = new HttpSessionRequestCache();
+        cache.setRequestMatcher(request -> "GET".equals(request.getMethod())
+                && (request.getContextPath() + "/oauth2/authorize").equals(request.getRequestURI()));
+        return cache;
+    }
     /**
      * 注册密码编码器：新密码采用框架编码格式，旧 BBS 密码哈希用于迁移兼容。
      */
@@ -77,7 +98,8 @@ public class SecurityConfig {
      * @throws Exception 构建失败时向启动过程传播异常。
      */
     @Bean @Order(1) // 注册优先匹配的链，只有协议端点请求才进入此链。
-    SecurityFilterChain protocolChain(HttpSecurity http, AccountSessionFilter sessionFilter) throws Exception {
+    SecurityFilterChain protocolChain(HttpSecurity http, AccountSessionFilter sessionFilter,
+            HttpSessionRequestCache authorizationRequestCache) throws Exception {
         // 创建 Spring Security 框架的 OAuth 授权服务器配置器
         var server = OAuth2AuthorizationServerConfigurer.authorizationServer(); 
         /**
@@ -85,6 +107,7 @@ public class SecurityConfig {
          * getEndpointsMatcher 返回框架封装的协议端点匹配器
          */
         http.securityMatcher(server.getEndpointsMatcher())
+                .requestCache(cache -> cache.requestCache(authorizationRequestCache))
                 // 应用授权服务器配置器，通过回调设置协议相关扩展
                 .with(server, authorization -> authorization
                         // 验证访问客户端
@@ -108,11 +131,15 @@ public class SecurityConfig {
                                                 // ? 启停检查
                                                 // 检查本次请求对应的已注册客户端是否被停用
                                                 if (!ClientService.isEnabled(context.getRegisteredClient())) { 
+                                                    log.warn("Authorization request rejected: client disabled");
                                                     // 拒绝请求，并交由框架授权端点错误处理器处理。
                                                     throw new OAuth2AuthorizationCodeRequestAuthenticationException(
                                                             // 使用标准 unauthorized_client 错误码，附带本次请求对象。
                                                             new OAuth2Error(OAuth2ErrorCodes.UNAUTHORIZED_CLIENT), token); 
                                                 }
+                                                log.info("Authorization request validated clientId={} pkcePresent={}",
+                                                        context.getRegisteredClient().getClientId(),
+                                                        token.getAdditionalParameters().containsKey("code_challenge"));
                                                 // PKCE 参数及算法交由框架默认校验，不额外要求每次授权请求使用 PKCE。
                                             }));
                                 }
@@ -142,6 +169,7 @@ public class SecurityConfig {
                 .securityContext(context -> context.requireExplicitSave(false)) 
                 // 在填充匿名身份前插入会话检查
                 .addFilterBefore(sessionFilter, AnonymousAuthenticationFilter.class);
+        log.info("OAuth/OIDC security chain configured");
         return http.build();
     }
 
@@ -157,9 +185,15 @@ public class SecurityConfig {
      */
     @Bean @Order(2) // 匹配优先级低于协议链；请求不会先执行协议链再执行本链。
     SecurityFilterChain applicationChain(HttpSecurity http, DaoAuthenticationProvider provider, // 注入构建器及账号密码认证提供者。
-            AccountSessionFilter sessionFilter, ObjectMapper json) throws Exception { // 注入会话过滤器和 JSON 序列化器。
+            AccountSessionFilter sessionFilter, ObjectMapper json,
+            HttpSessionRequestCache authorizationRequestCache) throws Exception { // 注入会话过滤器和 JSON 序列化器。
         var api = new AntPathRequestMatcher("/api/**"); // 创建 API 路径匹配器，供未认证错误处理器选择使用。
+        var success = new SavedRequestAwareAuthenticationSuccessHandler();
+        success.setRequestCache(authorizationRequestCache);
+        success.setDefaultTargetUrl("/account");
+        var failure = new SimpleUrlAuthenticationFailureHandler("/login?error");
         http.authenticationProvider(provider) // 将账号密码认证提供者加入本链的认证管理器。
+                .requestCache(cache -> cache.requestCache(authorizationRequestCache))
                 .authorizeHttpRequests(requests -> requests // 配置本链内请求的访问权限，规则按声明顺序匹配。
                         .requestMatchers("/login", "/error", "/api/csrf", "/api/accounts/register").permitAll() // 允许未登录访问这些入口；permitAll 不会关闭 CSRF 校验。
                         .requestMatchers("/api/admin/**").hasRole("AUTH_ADMIN") // 要求 ROLE_AUTH_ADMIN 权限；hasRole 自动添加 ROLE_ 前缀。
@@ -168,25 +202,44 @@ public class SecurityConfig {
                 .formLogin(login -> login // 使用前端登录页，账号密码认证仍交给框架过滤器。
                         .loginPage("/login") // GET /auth/login 由同源前端提供，不生成默认登录页。
                         .loginProcessingUrl("/api/login") // POST /auth/api/login 接收原生表单，与页面路径分离。
-                        .failureUrl("/login?error") // 认证失败后返回前端登录页。
-                        .defaultSuccessUrl("/account", false) // 优先恢复保存的授权请求，否则进入前端账号页。
+                        .failureHandler((request, response, exception) -> {
+                            log.warn("Password login failed exceptionType={}", exception.getClass().getSimpleName());
+                            failure.onAuthenticationFailure(request, response, exception);
+                        }) // 保留框架失败跳转，仅记录异常类型，不记录账号密码。
+                        .successHandler((request, response, authentication) -> {
+                            var saved = authorizationRequestCache.getRequest(request, response);
+                            // 清理升级前遗留的 API 返回地址，避免登录后导航到 JSON 接口。
+                            if (saved != null && !(request.getContextPath() + "/oauth2/authorize")
+                                    .equals(java.net.URI.create(saved.getRedirectUrl()).getPath())) {
+                                authorizationRequestCache.removeRequest(request, response);
+                                saved = null;
+                            }
+                            log.info("Password login succeeded subject={} resumeAuthorization={}",
+                                    authentication.getName(), saved != null);
+                            success.onAuthenticationSuccess(request, response, authentication);
+                        }) // 优先恢复授权请求，否则进入前端账号页。
                         .permitAll()) // 允许匿名访问登录入口，仍保留 CSRF 校验。
                 .logout(logout -> logout // 普通会话退出与 OIDC /connect/logout 分属不同配置。
                         .logoutUrl("/api/logout") // POST /auth/api/logout 处理退出，GET /auth/logout 是前端确认页。
                         .logoutSuccessUrl("/login?logout")) // 退出后返回前端登录页。
                 .exceptionHandling(exceptions -> exceptions // 配置未认证及访问拒绝时的响应。
                         .defaultAuthenticationEntryPointFor((request, response, exception) -> { // 定义下方 API 匹配器对应的未认证请求处理器。
+                            log.warn("API authentication required method={} exceptionType={}",
+                                    request.getMethod(), exception.getClass().getSimpleName());
                             response.setStatus(401); // 401 表示请求缺少有效认证身份。
                             response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE); // 使用 application/problem+json 标准错误响应类型。
                             json.writeValue(response.getOutputStream(), ProblemDetail.forStatus(401)); // 将 Spring 的 Problem Details 错误对象写入响应体。
                         }, api) // 将上方未认证处理器绑定到 /api/** 请求。
                         .accessDeniedHandler((request, response, exception) -> { // 处理本链的访问拒绝，例如权限不足或 CSRF 校验失败。
+                            log.warn("Application access denied method={} exceptionType={}",
+                                    request.getMethod(), exception.getClass().getSimpleName());
                             response.setStatus(403); // 403 表示请求被访问控制拒绝。
                             response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE); // 指定响应体采用标准 Problem Details JSON 格式。
                             json.writeValue(response.getOutputStream(), ProblemDetail.forStatus(403)); // 输出访问拒绝错误对象，不暴露内部异常详情。
                         })) // 结束访问拒绝回调及异常处理配置。
                 .securityContext(context -> context.requireExplicitSave(false)) // 自动保存认证上下文；Redis Session 的存储接入由其他配置负责。
                 .addFilterBefore(sessionFilter, AnonymousAuthenticationFilter.class); // 在填充匿名身份前检查已有会话的账号状态并刷新权限。
+        log.info("Application security chain configured loginProcessingPath=/auth/api/login");
         return http.build(); // 构建普通应用链，保留未显式关闭的 CSRF 等框架默认保护。
     } // 结束普通应用链定义。
 } // 结束安全配置类。

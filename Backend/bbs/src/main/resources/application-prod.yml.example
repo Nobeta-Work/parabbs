@@ -1,11 +1,11 @@
 para:
   jwt:
-    secret: 7VjK8Xp2RmF9nQ4zL6hGtD3wYcSbE5uI0oP1aZxC7vN2jM4kH6fW8qA9sD3gY
-    access-token-expire: 86400000
-    refresh-token-expire: 86400000
+    secret: ${PARA_JWT_SECRET}
+    access-token-expire: ${PARA_JWT_ACCESS_TOKEN_EXPIRE:900}
+    refresh-token-expire: ${PARA_JWT_REFRESH_TOKEN_EXPIRE:604800}
   file:
     managed:
-      root-path: /data/parabbs/avatar/
+      root-path: /data/parabbs/images/
       public-base-url: https://nobeta.cn/bbs/i/
       avatar-max-size: 10485760
       max-size: 15728640

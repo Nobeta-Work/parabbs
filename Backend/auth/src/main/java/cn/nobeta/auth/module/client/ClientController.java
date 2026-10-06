@@ -1,5 +1,7 @@
 package cn.nobeta.auth.module.client;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import cn.nobeta.auth.common.PageResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
@@ -9,11 +11,13 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/admin/clients")
 public class ClientController {
+    private static final Logger log = LoggerFactory.getLogger(ClientController.class);
     private final ClientService clients;
     public ClientController(ClientService clients) { this.clients = clients; }
 
     @PostMapping
     ResponseEntity<ClientService.SecretResponse> create(@Valid @RequestBody ClientRequest request) {
+        log.info("Controller client creation requested");
         var result = clients.create(request);
         return ResponseEntity.created(java.net.URI.create("./clients/" + result.client().id()))
                 .cacheControl(CacheControl.noStore()).body(result);
@@ -24,23 +28,28 @@ public class ClientController {
             @RequestParam(required = false) Boolean enabled,
             @RequestParam(defaultValue = "1") @Min(1) @Max(1000000) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
+        log.info("Controller client page requested page={} size={} enabled={}", page, size, enabled);
         return clients.page(query, enabled, page, size);
     }
 
     @GetMapping("/{id}") ClientView detail(@PathVariable @Size(max = 100) String id) {
+        log.info("Controller client detail requested");
         return clients.detail(id);
     }
     @PutMapping("/{id}") ClientView update(@PathVariable @Size(max = 100) String id,
             @Valid @RequestBody ClientRequest request) {
+        log.info("Controller client update requested");
         return clients.update(id, request);
     }
     public record StatusRequest(@NotNull Boolean enabled) {}
     @PutMapping("/{id}/status") ClientView status(@PathVariable @Size(max = 100) String id,
             @Valid @RequestBody StatusRequest request) {
+        log.info("Controller client status requested enabled={}", request.enabled());
         return clients.status(id, request.enabled());
     }
     @PostMapping("/{id}/secret/reset") ResponseEntity<ClientService.SecretResponse> reset(
             @PathVariable @Size(max = 100) String id) {
+        log.info("Controller client secret reset requested");
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(clients.resetSecret(id));
     }
 }

@@ -48,3 +48,10 @@ auth:
     enabled: ${AUTH_BOOTSTRAP_ENABLED:false}
     username: ${AUTH_BOOTSTRAP_USERNAME:}
     password: ${AUTH_BOOTSTRAP_PASSWORD:}
+
+# Request IDs correlate controllers and framework authentication without exposing credentials.
+logging:
+  level:
+    cn.nobeta.auth: INFO
+  pattern:
+    level: "%5p [authRequest:%X{authRequestId:-}]"

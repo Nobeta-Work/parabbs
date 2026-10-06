@@ -4,17 +4,6 @@
 
 
 
-    <!-- selectAuthUserByUsername --> 
-
-    <select id="selectAuthUserByUsername" parameterType="string"
-            resultType="cn.nobeta.bbs.module.user.entity.User">
-        SELECT
-            id, username, password, status, create_time, update_time
-        FROM sys_user
-        WHERE username = #{username}
-        LIMIT 1
-    </select>
-
     <!-- selectRoleCodesByUserId --> 
 
     <select id="selectRoleCodesByUserId" parameterType="long"
@@ -46,11 +35,9 @@
             useGeneratedKeys="true" keyProperty="id">
         INSERT INTO sys_user (
             username,
-            password,
             status
         ) VALUES (
             #{username},
-            #{password},
             #{status}
         )
     </insert>

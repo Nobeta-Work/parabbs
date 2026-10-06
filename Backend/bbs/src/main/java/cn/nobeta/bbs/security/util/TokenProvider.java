@@ -38,7 +38,7 @@ public class TokenProvider {
     public void init() {
         String secret = jwtProperties.getSecret();
         if (secret == null || secret.length() < 32) {
-            secret = "thisIsASecure256BitKeyForHmacSha256Algorithm";
+            throw new IllegalStateException("BBS JWT 签名密钥必须显式配置且不少于32个字符");
         }
 
         byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
@@ -46,6 +46,9 @@ public class TokenProvider {
 
         accessTokenExpire = jwtProperties.getAccessTokenExpire();
         refreshTokenExpire = jwtProperties.getRefreshTokenExpire();
+        if (accessTokenExpire <= 0 || refreshTokenExpire <= 0) {
+            throw new IllegalStateException("BBS 令牌有效期必须是正整数，单位为秒");
+        }
     }
 
     /** 生成 Access Token */

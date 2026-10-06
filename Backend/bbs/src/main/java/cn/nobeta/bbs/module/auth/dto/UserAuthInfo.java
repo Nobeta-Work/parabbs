@@ -59,7 +59,7 @@ public class UserAuthInfo implements UserDetails {
 
     @Override
     public String getPassword() {
-        return user.getPassword();
+        return ""; // BBS 不再保存或校验密码，仅保留 UserDetails 的业务身份接口。
     }
 
     @Override

@@ -4,7 +4,6 @@ import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Objects;
 import org.springframework.dao.DuplicateKeyException;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -18,7 +17,6 @@ import cn.nobeta.bbs.module.blog.mapper.BlogMapper;
 import cn.nobeta.bbs.module.box.OutboxDomainEventPublisher;
 import cn.nobeta.bbs.module.file.entity.ImagePurpose;
 import cn.nobeta.bbs.module.file.service.FileService;
-import cn.nobeta.bbs.module.user.dto.PasswordEditDTO;
 import cn.nobeta.bbs.module.user.dto.UserProfileDTO;
 import cn.nobeta.bbs.module.user.entity.User;
 import cn.nobeta.bbs.module.user.mapper.UserMapper;
@@ -34,7 +32,6 @@ public class UserServiceImpl implements UserService {
     private final UserMapper userMapper;
     private final AuthMapper authMapper;
     private final FileService fileService;
-    private final PasswordEncoder passwordEncoder;
     private final BlogMapper blogMapper;
     private final OutboxDomainEventPublisher eventPublisher;
 
@@ -70,19 +67,6 @@ public class UserServiceImpl implements UserService {
                     .payload(Map.of("blogId", blogId)).createTime(LocalDateTime.now()).build());
             }
         }
-    }
-
-    @Override
-    public void editUserPassword(Long userId, PasswordEditDTO dto) {
-        User user = userMapper.selectUserById(userId);
-        if (user == null) throw new BusinessException(ResultCode.RESOURCE_NOT_FOUND, "用户不存在");
-        if (!passwordEncoder.matches(dto.getOldPassword(), user.getPassword())) {
-            throw new BusinessException(ResultCode.OLD_PASSWORD_ERROR);
-        }
-        if (passwordEncoder.matches(dto.getNewPassword(), user.getPassword())) {
-            throw new BusinessException(ResultCode.NEW_PASSWORD_SAME_AS_OLD);
-        }
-        userMapper.updateUserPassword(userId, passwordEncoder.encode(dto.getNewPassword()));
     }
 
     @Override

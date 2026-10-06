@@ -13,6 +13,7 @@ public record ClientRequest(
         @NotEmpty Set<@NotBlank String> scopes,
         @NotEmpty Set<@NotBlank String> authorizationGrantTypes,
         boolean requireAuthorizationConsent,
+        boolean requireProofKey,
         @Min(30) @Max(600) long authorizationCodeTimeToLive,
         @Min(60) @Max(86400) long accessTokenTimeToLive,
         @Min(300) @Max(2592000) long refreshTokenTimeToLive,

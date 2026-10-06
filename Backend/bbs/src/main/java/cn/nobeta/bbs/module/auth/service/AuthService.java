@@ -1,14 +1,11 @@
 package cn.nobeta.bbs.module.auth.service;
 
-import cn.nobeta.bbs.module.auth.dto.LoginDTO;
-import cn.nobeta.bbs.module.auth.dto.RegisterDTO;
+import cn.nobeta.bbs.module.auth.dto.UserAuthInfo;
 import cn.nobeta.bbs.module.auth.vo.TokenVO;
 
 public interface AuthService {
 
-    TokenVO login(LoginDTO loginUser);
-
-    void register(RegisterDTO registerDTO);
+    TokenVO issue(UserAuthInfo loginUser);
 
     TokenVO refresh(String refreshToken);
 

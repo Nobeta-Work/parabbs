@@ -6,6 +6,7 @@ export interface Account {
   enabled: boolean
   createTime: string
   updateTime: string
+  roles: string[]
 }
 
 export class ApiError extends Error {
@@ -36,15 +37,46 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 export const getCsrf = () => request<CsrfToken>('/csrf', { cache: 'no-store' })
 export const getAccount = () => request<Account>('/accounts/me', { cache: 'no-store' })
 
-async function write(path: string, method: string, data: unknown) {
+async function write<T = Account | undefined>(path: string, method: string, data: unknown): Promise<T> {
   // Fetch immediately before each write so a login or another tab cannot leave a stale token.
   const csrf = await getCsrf()
-  return request<Account | undefined>(path, {
+  return request<T>(path, {
     method,
     headers: { 'Content-Type': 'application/json', [csrf.headerName]: csrf.token },
     body: JSON.stringify(data),
   })
 }
+
+export interface Page<T> { items: T[]; total: number; page: number; size: number }
+export interface ClientInput {
+  clientId: string; clientName: string; redirectUris: string[]; postLogoutRedirectUris: string[]
+  scopes: string[]; authorizationGrantTypes: string[]; requireAuthorizationConsent: boolean; requireProofKey: boolean
+  authorizationCodeTimeToLive: number; accessTokenTimeToLive: number; refreshTokenTimeToLive: number
+  clientSecretExpiresAt: string | null
+}
+export interface Client extends ClientInput {
+  id: string; enabled: boolean; clientIdIssuedAt: string; clientAuthenticationMethods: string[]; reuseRefreshTokens: boolean
+}
+export interface ClientSecret { client: Client; clientSecret: string }
+const queryString = (page: number, query: string, enabled: string) => {
+  const params = new URLSearchParams({ page: String(page), size: '20' })
+  if (query.trim()) params.set('query', query.trim())
+  if (enabled) params.set('enabled', enabled)
+  return params.toString()
+}
+export const listClients = (page: number, query: string, enabled: string) => request<Page<Client>>(`/admin/clients?${queryString(page, query, enabled)}`, { cache: 'no-store' })
+export const getClient = (id: string) => request<Client>(`/admin/clients/${encodeURIComponent(id)}`, { cache: 'no-store' })
+export const createClient = (body: ClientInput) => write<ClientSecret>('/admin/clients', 'POST', body)
+export const updateClient = (id: string, body: ClientInput) => write<Client>(`/admin/clients/${encodeURIComponent(id)}`, 'PUT', body)
+export const setClientStatus = (id: string, enabled: boolean) => write<Client>(`/admin/clients/${encodeURIComponent(id)}/status`, 'PUT', { enabled })
+export const resetClientSecret = (id: string) => write<ClientSecret>(`/admin/clients/${encodeURIComponent(id)}/secret/reset`, 'POST', {})
+export const listAccounts = (page: number, query: string, enabled: string) => request<Page<Account>>(`/admin/accounts?${queryString(page, query, enabled)}`, { cache: 'no-store' })
+export const getManagedAccount = (id: number) => request<Account>(`/admin/accounts/${id}`, { cache: 'no-store' })
+export const createManagedAccount = (username: string, password: string) => write<Account>('/admin/accounts', 'POST', { username, password })
+export const setAccountStatus = (id: number, enabled: boolean) => write<Account>(`/admin/accounts/${id}/status`, 'PUT', { enabled })
+export const setAccountRoles = (id: number, roles: string[]) => write<Account>(`/admin/accounts/${id}/roles`, 'PUT', { roles })
+export const resetAccountPassword = (id: number, password: string) => write<void>(`/admin/accounts/${id}/password`, 'PUT', { password })
+export const getAuthRoles = () => request<string[]>('/admin/roles', { cache: 'no-store' })
 
 export const registerAccount = (username: string, password: string) => write('/accounts/register', 'POST', { username, password })
 export const changePassword = (currentPassword: string, newPassword: string) => write('/accounts/me/password', 'PUT', { currentPassword, newPassword })

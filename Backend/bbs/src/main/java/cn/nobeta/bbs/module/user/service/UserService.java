@@ -2,7 +2,6 @@ package cn.nobeta.bbs.module.user.service;
 
 import org.springframework.web.multipart.MultipartFile;
 
-import cn.nobeta.bbs.module.user.dto.PasswordEditDTO;
 import cn.nobeta.bbs.module.user.dto.UserProfileDTO;
 import cn.nobeta.bbs.module.user.vo.AvatarVO;
 import cn.nobeta.bbs.module.user.vo.UserInfoVO;
@@ -17,8 +16,6 @@ public interface UserService {
     UserInfoVO queryUserInfoById(Long id);
 
     void editUserProfile(Long userId, UserProfileDTO userProfileDTO);
-
-    void editUserPassword(Long userId, PasswordEditDTO passwordEditDTO);
 
     AvatarVO editUserAvatar(Long userId, MultipartFile file);
 

@@ -7,17 +7,15 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/** sys_user 仅包含认证信息，不承载公开资料。 */
+/** BBS 业务用户；密码及统一身份由 Auth 管理。 */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-@Schema(description = "用户认证实体")
+@Schema(description = "社区业务用户")
 public class User {
     private Long id;
     private String username;
-    @Schema(description = "密码哈希")
-    private String password;
     private Integer status;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;

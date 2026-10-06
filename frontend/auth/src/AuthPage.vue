@@ -180,6 +180,7 @@ function dateLabel(value: string) {
         <div class="account-name"><span class="avatar" aria-hidden="true">{{ account.username.charAt(0).toUpperCase() }}</span><div><strong>{{ account.username }}</strong><span class="account-status">{{ account.enabled ? '账号正常' : '账号已停用' }}</span></div></div>
         <dl><div><dt>账号</dt><dd>{{ account.username }}</dd></div><div><dt>创建日期</dt><dd>{{ dateLabel(account.createTime) }}</dd></div></dl>
         <RouterLink to="/password" class="submit-button">修改密码</RouterLink>
+        <RouterLink v-if="account.roles.includes('ROLE_AUTH_ADMIN')" to="/admin" class="submit-button">认证中心管理</RouterLink>
         <div class="secondary-actions form-bottom"><a href="/bbs/">返回社区</a><RouterLink to="/logout">退出登录</RouterLink></div>
       </div>
 

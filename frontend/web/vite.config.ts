@@ -2,30 +2,28 @@ import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import path from 'path'
 
-// https://vite.dev/config/
 export default defineConfig(({ mode }) => {
-  // 加载环境变量
   const env = loadEnv(mode, process.cwd(), '')
-
+  const apiBase = env.VITE_API_BASE_URL || '/bbs/api'
+  const backend = env.BBS_PROXY_TARGET || 'http://localhost:8080'
   return {
     plugins: [vue()],
-    resolve: {
-      alias: {
-        '@': path.resolve(__dirname, './src'),
-      },
-    },
-    // 开发服务器配置
+    resolve: { alias: { '@': path.resolve(__dirname, './src') } },
     server: {
       port: Number(env.VITE_PORT) || 5173,
+      strictPort: true,
       proxy: {
-        // 代理所有/api开头的请求到后端/bbs/api
-        [env.VITE_API_BASE_URL || '/api']: {
-          target: "http://localhost:8081",
-          changeOrigin: true,
-        }
+        // 保留浏览器 Host，OIDC 回调和短期会话都经过同源开发服务器。
+        '/bbs/api': { target: backend, changeOrigin: false },
+        ...(apiBase !== '/bbs/api' ? {
+          [apiBase]: {
+            target: backend,
+            changeOrigin: false,
+            rewrite: (value: string) => '/bbs/api' + value.slice(apiBase.length),
+          },
+        } : {}),
       },
     },
-    // 构建配置
     base: '/bbs',
   }
 })

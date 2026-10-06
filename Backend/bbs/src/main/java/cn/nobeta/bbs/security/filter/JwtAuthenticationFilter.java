@@ -45,6 +45,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 		try {
 			// 提取 claims
 			Claims claims = tokenProvider.parseToken(token);
+            // 刷新令牌不能当作访问令牌用于业务接口。
+            if (!"access".equals(claims.get("type", String.class))) {
+                chain.doFilter(request, response);
+                return;
+            }
 
 			// 黑名单检查 jti 是否拉黑
 			if (isBlacklisted(claims.getId())) {
@@ -55,7 +60,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 			// 从 Redis 加载用户
 			Long userId = Long.parseLong(claims.getSubject());
 			UserAuthInfo loginUser = loadUserFromRedis(userId);
-			if (loginUser == null) {
+			if (loginUser == null || !loginUser.isEnabled()) {
 				chain.doFilter(request, response);
 				return;
 			}
@@ -69,7 +74,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 				new WebAuthenticationDetailsSource().buildDetails(request)
 			);
 			SecurityContextHolder.getContext().setAuthentication(authentication);
-		} catch (JwtException e) {
+		} catch (JwtException | IllegalArgumentException e) {
 			// Token 过期、签名错误，放行
 		}
 	

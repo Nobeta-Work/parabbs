@@ -22,7 +22,7 @@ interface RetriableRequestConfig extends InternalAxiosRequestConfig {
 }
 
 const service = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL,
+    baseURL: import.meta.env.VITE_API_BASE_URL || '/bbs/api',
     timeout: 10000,
     paramsSerializer: {
         serialize: serializeQueryParams,
@@ -77,7 +77,7 @@ function shouldSkipProactiveRefresh(config: InternalAxiosRequestConfig): boolean
 
 async function requestNewAccessToken(refreshToken: string): Promise<string | null> {
     const refreshResponse = await axios.request<ApiResponse<TokenVO>>({
-        baseURL: import.meta.env.VITE_API_BASE_URL,
+        baseURL: import.meta.env.VITE_API_BASE_URL || '/bbs/api',
         url: '/auth/refresh',
         method: 'post',
         params: { refreshToken },
