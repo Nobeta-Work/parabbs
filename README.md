@@ -5,7 +5,7 @@
 <a href="https://nobeta.cn/bbs"><img src="https://nobeta.cn/i/2026/08/21/721751.webp" width="30%"/></a>
 <br>
 <a href="https://nobeta.cn/bbs"><img src="https://img.shields.io/badge/BBS-ParaBBS-f5576c?logo=mdbook" alt="ParaBBS"></a>
-<a href="https://nobeta.cn/bbs/blog/2090582785885470720"><img src="https://img.shields.io/badge/version-0.5.0-blue" alt="Version 0.5.0"></a>
+<a href="https://nobeta.cn/bbs/blog/2105547823532474368"><img src="https://img.shields.io/badge/version-0.5.2-blue" alt="Version 0.5.2"></a>
 <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License-MIT"></a>
 <a href="https://www.java.com/zh-CN/"><img src="https://img.shields.io/badge/Java-17%2B-orange" alt="Java 17+"/></a>
 </div>
