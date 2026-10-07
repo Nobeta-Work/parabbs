@@ -3,7 +3,7 @@
   "info": {
     "title": "Para Auth API",
     "version": "0.5.2",
-    "description": "# Para Auth · v0.5.2\n\n`backend/auth` 当前实现的完整 OpenAPI 接口文档，包含业务 API、浏览器表单交互、OAuth 2.0 / OIDC 协议、接入流程、字段约束、调用示例和错误说明。\n\n实现基线：Spring Boot 3.5.6、Spring Authorization Server 1.5.2、Spring Security 6.5.5。共 23 个路径、28 个操作；12 个业务 Controller 映射全部覆盖。当前为静态源码核对结果，未启动服务验证部署。\n\n## 阅读与调用\n\n`info.description` 提供整体接入说明；各 operation 的 `description` 提供该接口的调用步骤、错误情形与 cURL 示例；`components.schemas` 定义请求与响应；`components.examples` 提供可复用的命名示例。示例中的域名、密码、令牌和状态值均用于说明，接入时替换为真实配置或本次请求生成值。\n\n命令示例使用 POSIX Shell 的 cURL 语法，不在文档生成时执行。提前设置 `AUTH_BASE`（例如 `https://nobeta.cn/auth`）；Cookie 保存在当前目录 `auth.cookies`。`CSRF_TOKEN` 取自同一会话的 `/api/csrf`；`CLIENT_ID` 是公开客户端标识，`CLIENT_SECRET` 是该客户端密钥；`CLIENT_RECORD_ID` 是管理接口内部 ID；`ACCOUNT_ID` 是账号数字 ID；`CODE`、`STATE`、`NONCE`、`CODE_VERIFIER`、`CODE_CHALLENGE`、`ACCESS_TOKEN`、`REFRESH_TOKEN`、`ID_TOKEN` 使用当前流程的值。示例不默认替用户建立接入应用会话。\n\n分页统一使用 `page=1..1000000`、`size=1..100`，默认 1 和 20；结果 `{items,total,page,size}` 中 total 是记录总数。集合响应不保证固定顺序，显式排序的分页列表除外。\n\n\n## 地址与文档使用\n\n| 项目 | 默认值 | 含义 |\n| --- | --- | --- |\n| 公开基础地址 / issuer | `https://nobeta.cn/auth` | `AUTH_ISSUER`，发现元数据和 JWT 的 `iss` 使用它 |\n| 服务监听端口 | `9000` | `AUTH_PORT` |\n| Servlet 上下文路径 | `/auth` | 固定应用路径前缀 |\n| 本地基础地址示例 | `http://localhost:9000/auth` | 仅在显式启用本地 HTTP、调整 issuer 与 Cookie 后使用 |\n\nOpenAPI 的 `servers.url` 已包含 `/auth`，因此 `paths` 使用 `/api/csrf` 而非 `/auth/api/csrf`。完整请求示例为 `GET https://nobeta.cn/auth/api/csrf`。\n\nJSON 与 YAML 都是 OpenAPI 文档格式。本文件采用 JSON，导入时选择 OpenAPI 文件即可。框架并未在本项目中配置 Swagger UI、`/v3/api-docs` 或在线托管此文件的端点；不能因为存在静态规范而推断服务提供这些 URL。\n\n浏览器交互接口返回 HTML 或 `302 Location`。在接口工具中直接执行它们，通常不能替代完整浏览器登录。跨域页面还会受到 Cookie、CORS 和浏览器安全策略限制：业务页面优先采用同源部署或服务端调用。\n\n## 概念与身份边界\n\n**SSO（Single Sign-On，单点登录）**：应用 A 登录后，用户访问应用 B 时，浏览器已携带认证中心会话，B 的授权请求可以复用这个身份。\n\n**OAuth 2.0**：允许应用通过授权码兑换访问令牌。**OIDC（OpenID Connect）**：在 OAuth 上增加身份认证，通过 ID Token 告诉应用“这次登录的用户是谁”。\n\n**OP（OpenID Provider，身份提供方）**是本项目 Auth。**RP（Relying Party，接入应用）**是 BBS、Noshow 等可信后端。每个应用独立管理自己的业务权限与本地会话。\n\n| 值 | 示例 / 类型 | 用在哪里 |\n| --- | --- | --- |\n| 账号 `id` | 数据库整数 `42` | 管理员账号路径 |\n| 账号 `username` | 小写登录账号 `alice` | 表单登录 |\n| 账号 `subject` / OIDC `sub` | 稳定 UUID | Auth 会话身份、ID Token、应用用户关联 |\n| 客户端内部 `id` | `ClientView.id`，新建时生成 UUID | `/api/admin/clients/{id}` |\n| 公开 `clientId` / 协议 `client_id` | `para-bbs` | 授权请求、Basic 客户端认证、ID Token audience |\n| `clientSecret` | 一次性展示的随机明文密钥 | 接入后端的协议认证 |\n\n例如，创建客户端后返回 `client.id=4de5...`、`client.clientId=para-bbs`。查询详情传内部 `id`；兑换授权码时 Basic 用户名传 `para-bbs`。混用会造成“记录不存在”或 `invalid_client`。\n\n应用关联用户应使用 `(issuer, sub)`。用户名可用于展示或登录输入，不能替代稳定身份标识。\n\n## 三种认证方式与 CSRF\n\n| 请求类型 | 凭证 | 额外要求 |\n| --- | --- | --- |\n| 当前账号和管理员业务 API | `AUTH_SESSION` Cookie | 管理员接口需 `ROLE_AUTH_ADMIN`；写操作需 CSRF |\n| `/login`、普通 `/logout` | 浏览器会话 Cookie、表单 | POST 需 `_csrf` 或对应 CSRF 请求头 |\n| `/oauth2/token`、`/oauth2/revoke`、`/oauth2/introspect` | HTTP Basic：`clientId:clientSecret` | 表单编码；无需 Auth Session 或 CSRF |\n| `/userinfo` | `Authorization: Bearer <access_token>` | 有效 OIDC 授权记录；不能用 ID Token |\n| Discovery、JWKS | 无 | 公开只读 |\n| 授权码流程与 OIDC 退出 | 浏览器导航及协议参数 | 根据流程复用中心会话；协议匹配器免会话 CSRF |\n\n**CSRF（Cross-Site Request Forgery，跨站请求伪造）防护**要求浏览器写请求同时提供会话 Cookie 和该会话的防伪令牌。仅有 Cookie 不够。\n\n业务写请求顺序：\n\n1. `GET /api/csrf`，保存响应 Cookie。\n2. 读取 `headerName`、`parameterName`、`token`。\n3. JSON 请求把 `token` 放在 `headerName` 指定的头中，默认 `X-CSRF-TOKEN`；表单可改为 `parameterName`，默认 `_csrf`。\n4. 登录成功后重新获取 CSRF，因为会话身份及令牌可能改变。\n\n匿名注册也需要 CSRF。`permitAll()` 只允许匿名访问，不关闭 CSRF。未登录的写请求可能先因缺少 CSRF 返回 `403`，而不是 `401`。\n\n`AUTH_SESSION` 默认 `HttpOnly; Secure; SameSite=Lax; Path=/auth`，会话超时配置为 30 分钟。Redis 保存会话，命名空间为 `para:auth:session`。Cookie 是会话组件管理的值，不应手工解码或复制成 Bearer Token。Swagger 等页面不能通过脚本自由设置 HttpOnly Cookie；使用实际登录会话和浏览器允许的凭据发送方式。\n\n项目未显式配置跨域 CORS 支持。设置 `credentials: include` 本身不能让任意其他源获准调用业务接口。\n\n## 完整 OIDC / SSO 流程\n\n```mermaid\nsequenceDiagram\n    participant Browser as 用户浏览器\n    participant RP as 接入应用后端\n    participant Auth as Auth 认证中心\n    Browser->>RP: 请求登录\n    RP->>RP: 保存 state、nonce、PKCE verifier\n    RP-->>Browser: 302 到授权端点\n    Browser->>Auth: GET /oauth2/authorize\n    opt 中心尚未登录\n        Auth-->>Browser: 302 到 /login\n        Browser->>Auth: 登录表单与 CSRF\n        Auth-->>Browser: 建立 AUTH_SESSION，继续授权\n    end\n    Auth-->>Browser: 302 到登记回调，携带 code、state\n    Browser->>RP: 回调 code、state\n    RP->>RP: 校验 state\n    RP->>Auth: POST /oauth2/token，Basic + code + verifier\n    Auth-->>RP: access_token、id_token，可选 refresh_token\n    RP->>RP: 验签并验证 ID Token，按 issuer/sub 关联用户\n    RP-->>Browser: 建立应用本地会话\n    opt 用户访问另一个接入应用\n        Browser->>Auth: 新应用的授权请求，携带中心 Cookie\n        Auth-->>Browser: 复用中心身份，返回该应用的授权码\n    end\n```\n\n### 7.1 初始授权请求\n\n```text\nGET /auth/oauth2/authorize\n  ?response_type=code\n  &client_id=para-bbs\n  &redirect_uri=https%3A%2F%2Fbbs.example.com%2Flogin%2Foauth2%2Fcode%2Fpara\n  &scope=openid\n  &state=<本次随机状态>\n  &nonce=<本次随机值>\n  &code_challenge=<S256挑战>\n  &code_challenge_method=S256\n```\n\n上面换行仅供阅读，实际 URL 应编码为一个请求。授权请求不包含 `clientSecret`。浏览器最终拿到的是授权码，而不是 Token。\n\n`state` 用于回调请求关联；`nonce` 用于将 ID Token 绑定到身份认证请求。接入后端负责随机生成、短期保存、严格比对及消费，不应使用规范示例的固定值。\n\n**PKCE（Proof Key for Code Exchange，授权码兑换证明）**：后端保存随机 `code_verifier`，授权阶段发送 `code_challenge=BASE64URL(SHA256(ASCII(code_verifier)))`，兑换时提供 verifier。当前服务不强制所有机密客户端使用 PKCE，但建议接入总是使用 S256。PKCE 不能替代 Basic 客户端认证。\n\n若回调不能安全使用，框架可能直接返回 `400`；若回调已验证，则通常 `302` 携带 `error` 和原 `state`。应用应处理回调中的 `error`，不能只处理 `code`。\n\n### 7.2 兑换及验证身份\n\n兑换请求：`POST /oauth2/token`，Basic 客户端认证，表单 `grant_type=authorization_code`、`code`、原 `redirect_uri`、原 `code_verifier`。授权码有效期由客户端配置决定且只能成功兑换一次。\n\n响应字段含义：\n\n| 字段 | 用途 |\n| --- | --- |\n| `access_token` | 调用受保护资源，例如 UserInfo |\n| `token_type` | `Bearer` |\n| `expires_in` | Access Token 剩余有效秒数 |\n| `scope` | 已授予范围，协议中以空格分隔 |\n| `id_token` | OIDC 身份证明 JWT |\n| `refresh_token` | 条件签发，用于后端刷新 |\n\n接入应用使用标准 OIDC 客户端库完成 ID Token 验证：按 `kid` 选择 JWKS 公钥、验证 RS256 签名，检查 `iss`、`aud`、`exp`、`iat` 和请求 `nonce` 等条件。规范中的 `IdTokenClaims` 只解释解码后结构；实际响应 `id_token` 是紧凑 JWT 字符串。不能把解码成功当作验签成功。\n\n在验证后按 `(issuer, sub)` 关联本地用户，再检查本地业务权限并建立应用会话。Auth 的管理员权限不自动等于 BBS 管理权限。\n\n### 7.3 UserInfo、刷新与元数据\n\n`GET` 或 `POST /userinfo` 使用 Bearer Access Token。当前仅 `openid`，只承诺返回 `sub`；不承诺用户名、头像、邮箱、`profile` 信息或角色。ID Token、Refresh Token 不能拿来调用此接口。\n\n项目启用 OIDC 并提供 `JwtDecoder`。Spring Authorization Server `1.5.2` 在 UserInfo 启用时自动接入 JWT Resource Server，因此无需从“项目没有显式调用 oauth2ResourceServer”推断此接口不可用。\n\n刷新请求使用 Basic 及 `grant_type=refresh_token`、`refresh_token`。客户端必须登记刷新授权类型。刷新成功后保存最新 Refresh Token，旧值失效；避免多个任务同时刷新同一值。`offline_access` 不是本项目支持的 scope，不能为请求刷新令牌添加它。\n\nDiscovery 发布的是框架总体能力，可能包含本项目注册策略不允许的认证方式、授权类型或声明名。客户端实际可配置能力以 `ClientRequest` 和管理服务限制为准。默认配置只允许一个 issuer；发现文档和 JWKS 公开读取不要求客户端凭证。\n\n## 退出、停用、撤销的影响范围\n\n问题示例：Auth 已删除账号授权记录，但 BBS 仍有自己的会话，或者某资源服务器只验证 JWT 签名和过期时间。这些系统不会仅因 Auth 数据变化立即退出用户。\n\n| 操作 | 当前中心会话 | 其他中心会话 | OAuth 授权记录 | 外部应用本地会话 |\n| --- | --- | --- | --- | --- |\n| 普通 `POST /api/logout` | 清除 | 不主动清除 | 不主动删除 | 不自动清除 |\n| 有效 `/connect/logout` | 当前主体已认证时清除 | 不主动清除 | 不主动删除 | 不自动清除 |\n| 修改密码 | 清除 | 删除该账号全部 Redis 会话 | 删除该账号全部授权 | 不自动清除 |\n| 停用账号 | 该账号会话失效 | 删除该账号全部 Redis 会话 | 删除该账号全部授权 | 不自动清除 |\n| 停用客户端 | 不清除账号全局会话 | 不主动清除 | 删除该客户端全部授权 | 不自动清除 |\n| 重置客户端密钥 | 不主动清除 | 不主动清除 | 不主动删除 | 不自动清除 |\n| 撤销 Token | 不主动清除 | 不主动清除 | 框架标记相关令牌失效 | 不自动清除 |\n\nAuth 的在线 Token 查询会结合账号与客户端状态。JWT 自身没有“数据库记录已撤销”的通知能力；只做离线验签的外部系统仍可能接受它直到过期。若业务需要更快生效，可设计应用会话撤销或在线有效性检查；这是额外能力，当前模块没有实现全局退出通知。\n\n普通 `GET /logout` 在 CSRF 开启时显示确认页；真正退出是带 CSRF 的 POST。`/connect/logout` 是另一条协议路径：当前默认 handler 对有效请求直接退出并 `302`，没有自定义确认页。它需要可查询到的 `id_token_hint`，可传登记的 `post_logout_redirect_uri` 和退出 `state`。默认无回调时跳转 `/`，不能假设那里存在页面。失败走 `sendError(400)`，不能按 OAuth Token 端点的 JSON 格式解析。\n\n## 错误格式与排查\n\n### 10.1 不能把所有错误统一为一种 DTO\n\n| 来源 | 常见状态 | 响应 |\n| --- | --- | --- |\n| 业务 Bean Validation、请求体不可读 | 400 | `application/problem+json`；`detail=Invalid request parameters` |\n| 数据库重复键被 `ApiErrors` 捕获 | 409 | ProblemDetail；`detail=The identifier already exists` |\n| API 未登录 | 401 | ProblemDetail |\n| 普通安全链拒绝权限 / CSRF | 403 | ProblemDetail |\n| Service 抛 `ResponseStatusException` | 400 / 403 / 404 / 409 | 可能走 Boot `/error`；当前未启用统一 Problem Details |\n| Token / Revoke / Introspect 协议失败 | 400 / 401 | OAuth `error` JSON；某些缺失认证失败可能仅有状态 / 头 |\n| 浏览器登录失败 | 302 | `Location: /auth/login?error` |\n| 授权请求失败 | 302 或 400 | 经安全回调返回协议参数，或直接错误；可能 HTML |\n| OIDC Logout 失败 | 400 | `sendError`，可能 Boot JSON / HTML |\n| Bearer 解码或 UserInfo 验证失败 | 401 / 403 等 | `WWW-Authenticate` 和协议错误，具体取决于失败阶段 |\n\n业务权限失败示例：\n\n```json\n{\"type\":\"about:blank\",\"title\":\"Forbidden\",\"status\":403}\n```\n\n业务校验失败示例：\n\n```json\n{\"type\":\"about:blank\",\"title\":\"Bad Request\",\"status\":400,\"detail\":\"Invalid request parameters\"}\n```\n\n协议失败示例：\n\n```json\n{\"error\":\"invalid_grant\"}\n```\n\n示例只展示稳定核心字段；`instance`、`detail`、`error_description` 等可能缺省。Service 源码中的异常 reason 不保证被默认配置公开到响应 `message`，不能把英文 reason 字符串当成已实现的业务错误码。\n\n### 10.2 常见失败\n\n| 现象 | 优先检查 |\n| --- | --- |\n| 注册或更新返回 403 | Cookie 与 CSRF 是否同一会话；注册开关；管理员权限 |\n| 管理接口返回 401 | 是否完成 Auth 表单登录，而非只获得 OAuth Token |\n| 客户端详情 404 | 传的是内部 `id` 还是公开 `clientId` |\n| 创建/更新客户端 400 | 完整 DTO、三个 TTL、openid-only、授权类型、回调集合总长度与到期时间 |\n| 回调被拒绝 | 完整 URI 是否与登记值匹配；HTTPS / 本地 HTTP 开关 |\n| Token `invalid_client` | Basic 是客户端凭证；客户端启用；密钥未过期且未重置 |\n| Token `invalid_grant` | code 是否已使用/过期；redirect_uri、verifier 是否匹配；账号/客户端/授权记录是否有效 |\n| 刷新失败 | 是否登记 refresh_token；是否重复或并发使用旧刷新令牌 |\n| UserInfo 失败 | 使用 Access Token；openid 授权记录仍有效；JWT issuer 与时效 |\n| HTTP 本地登录会话丢失 | `AUTH_SECURE_COOKIES` 是否 false；Cookie Path、主机与端口环境是否一致 |\n| Discovery 返回公开域名 | `AUTH_ISSUER` 是显式配置，不根据请求地址自动切换 |\n| 登录后跳转到拒绝页面 | 默认成功目标 `/` 未被安全链允许；应从授权请求发起流程 |\n| 重置密钥后仍然认证失败 | 到期时间被保留，或客户端仍停用 |\n| Auth 退出后 BBS 仍登录 | BBS 本地会话独立，当前没有全局单点退出通知 |\n\n## 开发配置与尚未支持的能力\n\n本地 HTTP 示例配置：\n\n```text\nAUTH_ISSUER=http://localhost:9000/auth\nAUTH_ALLOW_LOCAL_HTTP=true\nAUTH_SECURE_COOKIES=false\n```\n\n以上不能替代启动依赖。仍需配置 MySQL/Redis、密钥库和相应凭据。配置源码使用 `AUTH_DB_USERNAME`、`AUTH_DB_PASSWORD`、`AUTH_KEYSTORE_LOCATION`、`AUTH_KEYSTORE_PASSWORD`；活动密钥默认别名 `auth-signing`，需要匹配的 RSA 公私钥，活动 RSA 模数至少 2048 位。密钥库在启动时加载，轮换要保留旧验证公钥并重新加载服务。\n\n初始化管理员由 `AUTH_BOOTSTRAP_ENABLED` 和显式 bootstrap 账号凭据控制，没有公开“注册管理员”接口。Bootstrap 不会自动提升已经存在的普通账号。客户端管理日志记录动作、公开 clientId 和操作者，不记录明文密钥。\n\n数据库脚本位于 `infra/mysql/V1__auth_schema.sql`。当前应用配置 Flyway 读取 `classpath:db/migration`，而模块资源目录未包含该脚本；将脚本用于部署时，需要另行保证迁移资源或数据库初始化已经落地。静态 OpenAPI 文档不证明服务可直接启动。\n\n本版本没有实现以下接入能力，故不作为可用业务流程提供成功示例：\n\n- 公共客户端及 SPA 直接持有客户端密钥的模式。\n- `profile`、`email`、`offline_access`、自定义 scope 或角色 Claim。\n- 密码授权、客户端凭证授权、设备授权、Token Exchange。\n- OIDC 动态客户端注册、PAR（推送授权请求）。\n- 用户或客户端删除、管理员密码重置、角色管理、同意记录管理。\n- 向所有 RP 推送退出通知、全局单点退出、自动撤销外部应用会话。\n\n框架默认注册设备授权相关过滤器，不代表当前管理服务允许登记设备授权客户端。没有授权类型及用户交互支持的协议入口，不列为受支持的成功接入流程。动态注册和 PAR 还需要额外配置，本项目未启用。\n\n## 文档维护依据与规范参考\n\n修改实现时同步更新以下对应内容：\n\n| 实现文件 | 文档对应内容 |\n| --- | --- |\n| `AccountController`、`AccountService` | 账号路径、请求字段、密码/状态限制、撤销副作用 |\n| `ClientController`、`ClientRequest`、`ClientView`、`ClientService` | 客户端路径、配置限制、一次性密钥、更新语义 |\n| `PageResponse`、`ApiErrors` | 分页及业务错误 |\n| `SecurityConfig`、`AccountSessionFilter` | 会话认证、管理员权限、CSRF、浏览器重定向 |\n| `ProtocolConfig`、`ActiveAuthorizationService`、`EnabledClientProvider` | issuer、JWKS、实时状态检查及协议能力 |\n| `application.yml`、`pom.xml` | 上下文地址、Cookie、开关、默认值和框架版本 |\n\n协议行为应核对项目锁定版本，不能把较新文档中的额外能力直接写成当前已实现。关键核对参考：\n\n- [Spring Authorization Server 协议端点官方说明](https://docs.spring.io/spring-authorization-server/reference/protocol-endpoints.html)。\n- [1.5.2 OAuth2AuthorizationServerConfigurer](https://github.com/spring-projects/spring-authorization-server/blob/1.5.2/oauth2-authorization-server/src/main/java/org/springframework/security/oauth2/server/authorization/config/annotation/web/configurers/OAuth2AuthorizationServerConfigurer.java)：协议 CSRF 排除和 OIDC UserInfo JWT 接入。\n- [1.5.2 授权请求 Provider](https://github.com/spring-projects/spring-authorization-server/blob/1.5.2/oauth2-authorization-server/src/main/java/org/springframework/security/oauth2/server/authorization/authentication/OAuth2AuthorizationCodeRequestAuthenticationProvider.java)：openid-only 同意逻辑。\n- [1.5.2 OIDC Logout Filter](https://github.com/spring-projects/spring-authorization-server/blob/1.5.2/oauth2-authorization-server/src/main/java/org/springframework/security/oauth2/server/authorization/oidc/web/OidcLogoutEndpointFilter.java) 与 [默认成功处理器](https://github.com/spring-projects/spring-authorization-server/blob/1.5.2/oauth2-authorization-server/src/main/java/org/springframework/security/oauth2/server/authorization/oidc/web/authentication/OidcLogoutAuthenticationSuccessHandler.java)：退出重定向与错误处理。\n- [OpenAPI 3.0.3](https://spec.openapis.org/oas/v3.0.3)：本接口规范格式。\n- [OAuth 2.0 · RFC 6749](https://www.rfc-editor.org/rfc/rfc6749)、[PKCE · RFC 7636](https://www.rfc-editor.org/rfc/rfc7636)。\n- [Token Revocation · RFC 7009](https://www.rfc-editor.org/rfc/rfc7009)、[Token Introspection · RFC 7662](https://www.rfc-editor.org/rfc/rfc7662)。\n- [OIDC Core](https://openid.net/specs/openid-connect-core-1_0.html)、[Discovery](https://openid.net/specs/openid-connect-discovery-1_0.html)、[RP-Initiated Logout](https://openid.net/specs/openid-connect-rpinitiated-1_0.html)。\n\n## 前后端路由\n\n`GET /login`、`GET /logout` 由 `frontend/auth` 提供页面；`POST /api/login`、`POST /api/logout` 由 Spring Security 处理原生表单和 CSRF。生产使用同源 Nginx 按路径分流，协议端点路径保持不变；页面和成功/失败重定向不可只通过后端 9000 端口访问。"
+    "description": "# Para Auth · v0.5.2\n\n`backend/auth` 当前实现的完整 OpenAPI 接口文档，包含业务 API、浏览器表单交互、OAuth 2.0 / OIDC 协议、接入流程、字段约束、调用示例和错误说明。\n\n实现基线：Spring Boot 3.5.6、Spring Authorization Server 1.5.2、Spring Security 6.5.5。共 23 个路径、28 个操作；12 个业务 Controller 映射全部覆盖。当前为静态源码核对结果，未启动服务验证部署。\n\n## 阅读与调用\n\n`info.description` 提供整体接入说明；各 operation 的 `description` 提供该接口的调用步骤、错误情形与 cURL 示例；`components.schemas` 定义请求与响应；`components.examples` 提供可复用的命名示例。示例中的域名、密码、令牌和状态值均用于说明，接入时替换为真实配置或本次请求生成值。\n\n命令示例使用 POSIX Shell 的 cURL 语法，不在文档生成时执行。提前设置 `AUTH_BASE`（例如 `https://nobeta.cn/auth`）；Cookie 保存在当前目录 `auth.cookies`。`CSRF_TOKEN` 取自同一会话的 `/api/csrf`；`CLIENT_ID` 是公开客户端标识，`CLIENT_SECRET` 是该客户端密钥；`CLIENT_RECORD_ID` 是管理接口内部 ID；`ACCOUNT_ID` 是账号数字 ID；`CODE`、`STATE`、`NONCE`、`CODE_VERIFIER`、`CODE_CHALLENGE`、`ACCESS_TOKEN`、`REFRESH_TOKEN`、`ID_TOKEN` 使用当前流程的值。示例不默认替用户建立接入应用会话。\n\n分页统一使用 `page=1..1000000`、`size=1..100`，默认 1 和 20；结果 `{items,total,page,size}` 中 total 是记录总数。集合响应不保证固定顺序，显式排序的分页列表除外。\n\n\n## 地址与文档使用\n\n| 项目 | 默认值 | 含义 |\n| --- | --- | --- |\n| 公开基础地址 / issuer | `https://nobeta.cn/auth` | `AUTH_ISSUER`，发现元数据和 JWT 的 `iss` 使用它 |\n| 服务监听端口 | `9000` | `AUTH_PORT` |\n| Servlet 上下文路径 | `/auth` | 固定应用路径前缀 |\n| 本地基础地址示例 | `http://localhost:9000/auth` | 仅在显式启用本地 HTTP、调整 issuer 与 Cookie 后使用 |\n\nOpenAPI 的 `servers.url` 已包含 `/auth`，因此 `paths` 使用 `/api/csrf` 而非 `/auth/api/csrf`。完整请求示例为 `GET https://nobeta.cn/auth/api/csrf`。\n\nJSON 与 YAML 都是 OpenAPI 文档格式。本文件采用 JSON，导入时选择 OpenAPI 文件即可。框架并未在本项目中配置 Swagger UI、`/v3/api-docs` 或在线托管此文件的端点；不能因为存在静态规范而推断服务提供这些 URL。\n\n浏览器交互接口返回 HTML 或 `302 Location`。在接口工具中直接执行它们，通常不能替代完整浏览器登录。跨域页面还会受到 Cookie、CORS 和浏览器安全策略限制：业务页面优先采用同源部署或服务端调用。\n\n## 概念与身份边界\n\n**SSO（Single Sign-On，单点登录）**：应用 A 登录后，用户访问应用 B 时，浏览器已携带认证中心会话，B 的授权请求可以复用这个身份。\n\n**OAuth 2.0**：允许应用通过授权码兑换访问令牌。**OIDC（OpenID Connect）**：在 OAuth 上增加身份认证，通过 ID Token 告诉应用“这次登录的用户是谁”。\n\n**OP（OpenID Provider，身份提供方）**是本项目 Auth。**RP（Relying Party，接入应用）**是 BBS、Noshow 等可信后端。每个应用独立管理自己的业务权限与本地会话。\n\n| 值 | 示例 / 类型 | 用在哪里 |\n| --- | --- | --- |\n| 账号 `id` | 数据库整数 `42` | 管理员账号路径 |\n| 账号 `username` | 小写登录账号 `alice` | 表单登录 |\n| 账号 `subject` / OIDC `sub` | 稳定 UUID | Auth 会话身份、ID Token、应用用户关联 |\n| 客户端内部 `id` | `ClientView.id`，新建时生成 UUID | `/api/admin/clients/{id}` |\n| 公开 `clientId` / 协议 `client_id` | `para-bbs` | 授权请求、Basic 客户端认证、ID Token audience |\n| `clientSecret` | 一次性展示的随机明文密钥 | 接入后端的协议认证 |\n\n例如，创建客户端后返回 `client.id=4de5...`、`client.clientId=para-bbs`。查询详情传内部 `id`；兑换授权码时 Basic 用户名传 `para-bbs`。混用会造成“记录不存在”或 `invalid_client`。\n\n应用关联用户应使用 `(issuer, sub)`。用户名可用于展示或登录输入，不能替代稳定身份标识。\n\n## 三种认证方式与 CSRF\n\n| 请求类型 | 凭证 | 额外要求 |\n| --- | --- | --- |\n| 当前账号和管理员业务 API | `AUTH_SESSION` Cookie | 管理员接口需 `ROLE_AUTH_ADMIN`；写操作需 CSRF |\n| `/login`、普通 `/logout` | 浏览器会话 Cookie、表单 | POST 需 `_csrf` 或对应 CSRF 请求头 |\n| `/oauth2/token`、`/oauth2/revoke`、`/oauth2/introspect` | HTTP Basic：`clientId:clientSecret` | 表单编码；无需 Auth Session 或 CSRF |\n| `/userinfo` | `Authorization: Bearer <access_token>` | 有效 OIDC 授权记录；不能用 ID Token |\n| Discovery、JWKS | 无 | 公开只读 |\n| 授权码流程与 OIDC 退出 | 浏览器导航及协议参数 | 根据流程复用中心会话；协议匹配器免会话 CSRF |\n\n**CSRF（Cross-Site Request Forgery，跨站请求伪造）防护**要求浏览器写请求同时提供会话 Cookie 和该会话的防伪令牌。仅有 Cookie 不够。\n\n业务写请求顺序：\n\n1. `GET /api/csrf`，保存响应 Cookie。\n2. 读取 `headerName`、`parameterName`、`token`。\n3. JSON 请求把 `token` 放在 `headerName` 指定的头中，默认 `X-CSRF-TOKEN`；表单可改为 `parameterName`，默认 `_csrf`。\n4. 登录成功后重新获取 CSRF，因为会话身份及令牌可能改变。\n\n匿名注册也需要 CSRF。`permitAll()` 只允许匿名访问，不关闭 CSRF。未登录的写请求可能先因缺少 CSRF 返回 `403`，而不是 `401`。\n\n`AUTH_SESSION` 默认 `HttpOnly; Secure; SameSite=Lax; Path=/auth`，会话超时配置为 30 分钟。Redis 保存会话，命名空间为 `para:auth:session`。Cookie 是会话组件管理的值，不应手工解码或复制成 Bearer Token。Swagger 等页面不能通过脚本自由设置 HttpOnly Cookie；使用实际登录会话和浏览器允许的凭据发送方式。\n\n项目未显式配置跨域 CORS 支持。设置 `credentials: include` 本身不能让任意其他源获准调用业务接口。\n\n## 完整 OIDC / SSO 流程\n\n```mermaid\nsequenceDiagram\n    participant Browser as 用户浏览器\n    participant RP as 接入应用后端\n    participant Auth as Auth 认证中心\n    Browser->>RP: 请求登录\n    RP->>RP: 保存 state、nonce、PKCE verifier\n    RP-->>Browser: 302 到授权端点\n    Browser->>Auth: GET /oauth2/authorize\n    opt 中心尚未登录\n        Auth-->>Browser: 302 到 /login\n        Browser->>Auth: 登录表单与 CSRF\n        Auth-->>Browser: 建立 AUTH_SESSION，继续授权\n    end\n    Auth-->>Browser: 302 到登记回调，携带 code、state\n    Browser->>RP: 回调 code、state\n    RP->>RP: 校验 state\n    RP->>Auth: POST /oauth2/token，Basic + code + verifier\n    Auth-->>RP: access_token、id_token，可选 refresh_token\n    RP->>RP: 验签并验证 ID Token，按 issuer/sub 关联用户\n    RP-->>Browser: 建立应用本地会话\n    opt 用户访问另一个接入应用\n        Browser->>Auth: 新应用的授权请求，携带中心 Cookie\n        Auth-->>Browser: 复用中心身份，返回该应用的授权码\n    end\n```\n\n### 7.1 初始授权请求\n\n```text\nGET /auth/oauth2/authorize\n  ?response_type=code\n  &client_id=para-bbs\n  &redirect_uri=https%3A%2F%2Fbbs.example.com%2Flogin%2Foauth2%2Fcode%2Fpara\n  &scope=openid\n  &state=<本次随机状态>\n  &nonce=<本次随机值>\n  &code_challenge=<S256挑战>\n  &code_challenge_method=S256\n```\n\n上面换行仅供阅读，实际 URL 应编码为一个请求。授权请求不包含 `clientSecret`。浏览器最终拿到的是授权码，而不是 Token。\n\n`state` 用于回调请求关联；`nonce` 用于将 ID Token 绑定到身份认证请求。接入后端负责随机生成、短期保存、严格比对及消费，不应使用规范示例的固定值。\n\n**PKCE（Proof Key for Code Exchange，授权码兑换证明）**：后端保存随机 `code_verifier`，授权阶段发送 `code_challenge=BASE64URL(SHA256(ASCII(code_verifier)))`，兑换时提供 verifier。当前服务不强制所有机密客户端使用 PKCE，但建议接入总是使用 S256。PKCE 不能替代 Basic 客户端认证。\n\n若回调不能安全使用，框架可能直接返回 `400`；若回调已验证，则通常 `302` 携带 `error` 和原 `state`。应用应处理回调中的 `error`，不能只处理 `code`。\n\n### 7.2 兑换及验证身份\n\n兑换请求：`POST /oauth2/token`，Basic 客户端认证，表单 `grant_type=authorization_code`、`code`、原 `redirect_uri`、原 `code_verifier`。授权码有效期由客户端配置决定且只能成功兑换一次。\n\n响应字段含义：\n\n| 字段 | 用途 |\n| --- | --- |\n| `access_token` | 调用受保护资源，例如 UserInfo |\n| `token_type` | `Bearer` |\n| `expires_in` | Access Token 剩余有效秒数 |\n| `scope` | 已授予范围，协议中以空格分隔 |\n| `id_token` | OIDC 身份证明 JWT |\n| `refresh_token` | 条件签发，用于后端刷新 |\n\n接入应用使用标准 OIDC 客户端库完成 ID Token 验证：按 `kid` 选择 JWKS 公钥、验证 RS256 签名，检查 `iss`、`aud`、`exp`、`iat` 和请求 `nonce` 等条件。规范中的 `IdTokenClaims` 只解释解码后结构；实际响应 `id_token` 是紧凑 JWT 字符串。不能把解码成功当作验签成功。\n\n在验证后按 `(issuer, sub)` 关联本地用户，再检查本地业务权限并建立应用会话。Auth 的管理员权限不自动等于 BBS 管理权限。\n\n### 7.3 UserInfo、刷新与元数据\n\n`GET` 或 `POST /userinfo` 使用 Bearer Access Token。当前仅 `openid`，只承诺返回 `sub`；不承诺用户名、头像、邮箱、`profile` 信息或角色。ID Token、Refresh Token 不能拿来调用此接口。\n\n项目启用 OIDC 并提供 `JwtDecoder`。Spring Authorization Server `1.5.2` 在 UserInfo 启用时自动接入 JWT Resource Server，因此无需从“项目没有显式调用 oauth2ResourceServer”推断此接口不可用。\n\n刷新请求使用 Basic 及 `grant_type=refresh_token`、`refresh_token`。客户端必须登记刷新授权类型。刷新成功后保存最新 Refresh Token，旧值失效；避免多个任务同时刷新同一值。`offline_access` 不是本项目支持的 scope，不能为请求刷新令牌添加它。\n\nDiscovery 发布的是框架总体能力，可能包含本项目注册策略不允许的认证方式、授权类型或声明名。客户端实际可配置能力以 `ClientRequest` 和管理服务限制为准。默认配置只允许一个 issuer；发现文档和 JWKS 公开读取不要求客户端凭证。\n\n## 退出、停用、撤销的影响范围\n\n问题示例：Auth 已删除账号授权记录，但 BBS 仍有自己的会话，或者某资源服务器只验证 JWT 签名和过期时间。这些系统不会仅因 Auth 数据变化立即退出用户。\n\n| 操作 | 当前中心会话 | 其他中心会话 | OAuth 授权记录 | 外部应用本地会话 |\n| --- | --- | --- | --- | --- |\n| 普通 `POST /api/logout` | 清除 | 不主动清除 | 不主动删除 | 不自动清除 |\n| 有效 `/connect/logout` | 当前主体已认证时清除 | 不主动清除 | 不主动删除 | 不自动清除 |\n| 修改密码 | 清除 | 删除该账号全部 Redis 会话 | 删除该账号全部授权 | 不自动清除 |\n| 停用账号 | 该账号会话失效 | 删除该账号全部 Redis 会话 | 删除该账号全部授权 | 不自动清除 |\n| 停用客户端 | 不清除账号全局会话 | 不主动清除 | 删除该客户端全部授权 | 不自动清除 |\n| 重置客户端密钥 | 不主动清除 | 不主动清除 | 不主动删除 | 不自动清除 |\n| 撤销 Token | 不主动清除 | 不主动清除 | 框架标记相关令牌失效 | 不自动清除 |\n\nAuth 的在线 Token 查询会结合账号与客户端状态。JWT 自身没有“数据库记录已撤销”的通知能力；只做离线验签的外部系统仍可能接受它直到过期。若业务需要更快生效，可设计应用会话撤销或在线有效性检查；这是额外能力，当前模块没有实现全局退出通知。\n\n普通 `GET /logout` 在 CSRF 开启时显示确认页；真正退出是带 CSRF 的 POST。`/connect/logout` 是另一条协议路径：当前默认 handler 对有效请求直接退出并 `302`，没有自定义确认页。它需要可查询到的 `id_token_hint`，可传登记的 `post_logout_redirect_uri` 和退出 `state`。默认无回调时跳转 `/`，不能假设那里存在页面。失败走 `sendError(400)`，不能按 OAuth Token 端点的 JSON 格式解析。\n\n## 错误格式与排查\n\n### 10.1 不能把所有错误统一为一种 DTO\n\n| 来源 | 常见状态 | 响应 |\n| --- | --- | --- |\n| 业务 Bean Validation、请求体不可读 | 400 | `application/problem+json`；`detail=Invalid request parameters` |\n| 数据库重复键被 `ApiErrors` 捕获 | 409 | ProblemDetail；`detail=The identifier already exists` |\n| API 未登录 | 401 | ProblemDetail |\n| 普通安全链拒绝权限 / CSRF | 403 | ProblemDetail |\n| Service 抛 `ResponseStatusException` | 400 / 403 / 404 / 409 | 可能走 Boot `/error`；当前未启用统一 Problem Details |\n| Token / Revoke / Introspect 协议失败 | 400 / 401 | OAuth `error` JSON；某些缺失认证失败可能仅有状态 / 头 |\n| 浏览器登录失败 | 302 | `Location: /auth/login?error` |\n| 授权请求失败 | 302 或 400 | 经安全回调返回协议参数，或直接错误；可能 HTML |\n| OIDC Logout 失败 | 400 | `sendError`，可能 Boot JSON / HTML |\n| Bearer 解码或 UserInfo 验证失败 | 401 / 403 等 | `WWW-Authenticate` 和协议错误，具体取决于失败阶段 |\n\n业务权限失败示例：\n\n```json\n{\"type\":\"about:blank\",\"title\":\"Forbidden\",\"status\":403}\n```\n\n业务校验失败示例：\n\n```json\n{\"type\":\"about:blank\",\"title\":\"Bad Request\",\"status\":400,\"detail\":\"Invalid request parameters\"}\n```\n\n协议失败示例：\n\n```json\n{\"error\":\"invalid_grant\"}\n```\n\n示例只展示稳定核心字段；`instance`、`detail`、`error_description` 等可能缺省。Service 源码中的异常 reason 不保证被默认配置公开到响应 `message`，不能把英文 reason 字符串当成已实现的业务错误码。\n\n### 10.2 常见失败\n\n| 现象 | 优先检查 |\n| --- | --- |\n| 注册或更新返回 403 | Cookie 与 CSRF 是否同一会话；注册开关；管理员权限 |\n| 管理接口返回 401 | 是否完成 Auth 表单登录，而非只获得 OAuth Token |\n| 客户端详情 404 | 传的是内部 `id` 还是公开 `clientId` |\n| 创建/更新客户端 400 | 完整 DTO、三个 TTL、openid-only、授权类型、回调集合总长度与到期时间 |\n| 回调被拒绝 | 完整 URI 是否与登记值匹配；HTTPS / 本地 HTTP 开关 |\n| Token `invalid_client` | Basic 是客户端凭证；客户端启用；密钥未过期且未重置 |\n| Token `invalid_grant` | code 是否已使用/过期；redirect_uri、verifier 是否匹配；账号/客户端/授权记录是否有效 |\n| 刷新失败 | 是否登记 refresh_token；是否重复或并发使用旧刷新令牌 |\n| UserInfo 失败 | 使用 Access Token；openid 授权记录仍有效；JWT issuer 与时效 |\n| HTTP 本地登录会话丢失 | `AUTH_SECURE_COOKIES` 是否 false；Cookie Path、主机与端口环境是否一致 |\n| Discovery 返回公开域名 | `AUTH_ISSUER` 是显式配置，不根据请求地址自动切换 |\n| 登录后跳转到拒绝页面 | 默认成功目标 `/` 未被安全链允许；应从授权请求发起流程 |\n| 重置密钥后仍然认证失败 | 到期时间被保留，或客户端仍停用 |\n| Auth 退出后 BBS 仍登录 | BBS 本地会话独立，当前没有全局单点退出通知 |\n\n## 开发配置与尚未支持的能力\n\n本地 HTTP 示例配置：\n\n```text\nAUTH_ISSUER=http://localhost:9000/auth\nAUTH_ALLOW_LOCAL_HTTP=true\nAUTH_SECURE_COOKIES=false\n```\n\n以上不能替代启动依赖。仍需配置 MySQL/Redis、密钥库和相应凭据。配置源码使用 `AUTH_DB_USERNAME`、`AUTH_DB_PASSWORD`、`AUTH_KEYSTORE_LOCATION`、`AUTH_KEYSTORE_PASSWORD`；活动密钥默认别名 `auth-signing`，需要匹配的 RSA 公私钥，活动 RSA 模数至少 2048 位。密钥库在启动时加载，轮换要保留旧验证公钥并重新加载服务。\n\n初始化管理员由 `AUTH_BOOTSTRAP_ENABLED` 和显式 bootstrap 账号凭据控制，没有公开“注册管理员”接口。Bootstrap 不会自动提升已经存在的普通账号。客户端管理日志记录动作、公开 clientId 和操作者，不记录明文密钥。\n\n数据库脚本位于 `infra/mysql/V1__auth_schema.sql`。当前应用配置 Flyway 读取 `classpath:db/migration`，而模块资源目录未包含该脚本；将脚本用于部署时，需要另行保证迁移资源或数据库初始化已经落地。静态 OpenAPI 文档不证明服务可直接启动。\n\n本版本没有实现以下接入能力，故不作为可用业务流程提供成功示例：\n\n- 公共客户端及 SPA 直接持有客户端密钥的模式。\n- `profile`、`email`、`offline_access`、自定义 scope 或角色 Claim。\n- 密码授权、客户端凭证授权、设备授权、Token Exchange。\n- OIDC 动态客户端注册、PAR（推送授权请求）。\n- 用户或客户端删除、管理员密码重置、角色管理、同意记录管理。\n- 向所有 RP 推送退出通知、全局单点退出、自动撤销外部应用会话。\n\n框架默认注册设备授权相关过滤器，不代表当前管理服务允许登记设备授权客户端。没有授权类型及用户交互支持的协议入口，不列为受支持的成功接入流程。动态注册和 PAR 还需要额外配置，本项目未启用。\n\n## 文档维护依据与规范参考\n\n修改实现时同步更新以下对应内容：\n\n| 实现文件 | 文档对应内容 |\n| --- | --- |\n| `AccountController`、`AccountService` | 账号路径、请求字段、密码/状态限制、撤销副作用 |\n| `ClientController`、`ClientRequest`、`ClientView`、`ClientService` | 客户端路径、配置限制、一次性密钥、更新语义 |\n| `PageResponse`、`ApiErrors` | 分页及业务错误 |\n| `SecurityConfig`、`AccountSessionFilter` | 会话认证、管理员权限、CSRF、浏览器重定向 |\n| `ProtocolConfig`、`ActiveAuthorizationService`、`EnabledClientProvider` | issuer、JWKS、实时状态检查及协议能力 |\n| `application.yml`、`pom.xml` | 上下文地址、Cookie、开关、默认值和框架版本 |\n\n协议行为应核对项目锁定版本，不能把较新文档中的额外能力直接写成当前已实现。关键核对参考：\n\n- [Spring Authorization Server 协议端点官方说明](https://docs.spring.io/spring-authorization-server/reference/protocol-endpoints.html)。\n- [1.5.2 OAuth2AuthorizationServerConfigurer](https://github.com/spring-projects/spring-authorization-server/blob/1.5.2/oauth2-authorization-server/src/main/java/org/springframework/security/oauth2/server/authorization/config/annotation/web/configurers/OAuth2AuthorizationServerConfigurer.java)：协议 CSRF 排除和 OIDC UserInfo JWT 接入。\n- [1.5.2 授权请求 Provider](https://github.com/spring-projects/spring-authorization-server/blob/1.5.2/oauth2-authorization-server/src/main/java/org/springframework/security/oauth2/server/authorization/authentication/OAuth2AuthorizationCodeRequestAuthenticationProvider.java)：openid-only 同意逻辑。\n- [1.5.2 OIDC Logout Filter](https://github.com/spring-projects/spring-authorization-server/blob/1.5.2/oauth2-authorization-server/src/main/java/org/springframework/security/oauth2/server/authorization/oidc/web/OidcLogoutEndpointFilter.java) 与 [默认成功处理器](https://github.com/spring-projects/spring-authorization-server/blob/1.5.2/oauth2-authorization-server/src/main/java/org/springframework/security/oauth2/server/authorization/oidc/web/authentication/OidcLogoutAuthenticationSuccessHandler.java)：退出重定向与错误处理。\n- [OpenAPI 3.0.3](https://spec.openapis.org/oas/v3.0.3)：本接口规范格式。\n- [OAuth 2.0 · RFC 6749](https://www.rfc-editor.org/rfc/rfc6749)、[PKCE · RFC 7636](https://www.rfc-editor.org/rfc/rfc7636)。\n- [Token Revocation · RFC 7009](https://www.rfc-editor.org/rfc/rfc7009)、[Token Introspection · RFC 7662](https://www.rfc-editor.org/rfc/rfc7662)。\n- [OIDC Core](https://openid.net/specs/openid-connect-core-1_0.html)、[Discovery](https://openid.net/specs/openid-connect-discovery-1_0.html)、[RP-Initiated Logout](https://openid.net/specs/openid-connect-rpinitiated-1_0.html)。\n\n## 前后端路由\n\n`GET /login`、`GET /logout` 由 `frontend/auth` 提供页面；`POST /api/login`、`POST /api/logout` 由 Spring Security 处理原生表单和 CSRF。生产使用同源 Nginx 按路径分流，协议端点路径保持不变；页面和成功/失败重定向不可只通过后端 9000 端口访问。\n\n## 当前管理扩展\n\n账号响应增加 roles；新增账号详情、管理员创建、角色替换、密码重置、角色目录接口；账号列表支持 query/enabled。客户端写入支持 requireProofKey（默认 false）。普通角色无需登记即可登录，ROLE_AUTH_ADMIN 仅用于 Auth 管理，不自动赋予 BBS 管理员权限。管理角色接口替换全部角色，不保留手工添加的 ROLE_AUTH_USER。\n\n页面 /login、/logout 由独立前端提供；表单 POST 使用 /api/login、/api/logout。JSON 管理 API 使用 Cookie + CSRF，协议 token/revoke/introspect 使用客户端 Basic 认证，二者不可混用。Auth API 不使用 BBS 的 Result 包装。\n\n本次文档按源码核对，未进行生产接口调用。"
   },
   "servers": [
     {
@@ -353,7 +353,7 @@
         ],
         "operationId": "listAccounts",
         "summary": "分页查询账号",
-        "description": "要求会话具备 ROLE_AUTH_ADMIN。按数据库 id 升序返回；没有用户名搜索或 enabled 筛选参数。\n\n### cURL 调用示例\n\n```bash\ncurl --include \\\n  --cookie auth.cookies --cookie-jar auth.cookies \\\n  --get \\\n  --data-urlencode \"page=1\" \\\n  --data-urlencode \"size=20\" \\\n  \"$AUTH_BASE/api/admin/accounts\"\n```\n\n变量说明见文档开头。",
+        "description": "按账号 ID 升序分页查询。支持账号名子串搜索 query（去首尾空白并转小写）及 enabled 状态筛选。要求 ROLE_AUTH_ADMIN；响应 roles 是 Auth 权限，不是 BBS 权限。",
         "security": [
           {
             "AuthSession": []
@@ -397,6 +397,23 @@
           },
           {
             "$ref": "#/components/parameters/Size"
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "description": "账号名子串，可省略。"
+          },
+          {
+            "name": "enabled",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "true=启用，false=停用；省略表示全部。"
           }
         ],
         "x-required-authorities": [
@@ -413,6 +430,71 @@
           "backend/auth/src/main/java/cn/nobeta/auth/module/account/AccountController.java",
           "backend/auth/src/main/java/cn/nobeta/auth/module/account/AccountService.java"
         ]
+      },
+      "post": {
+        "tags": [
+          "Administration"
+        ],
+        "operationId": "createManagedAccount",
+        "summary": "管理员创建账号",
+        "description": "不受开放注册开关限制。创建普通账号，不自动授予管理员角色。username 规范化为小写；密码至少 12 个字符且最多 72 个 UTF-8 字节。",
+        "security": [
+          {
+            "AuthSession": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "操作成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountView"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BusinessBadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/UnexpectedError"
+          }
+        },
+        "x-required-authorities": [
+          "ROLE_AUTH_ADMIN"
+        ],
+        "x-implementation-source": [
+          "backend/auth/src/main/java/cn/nobeta/auth/module/account/AccountController.java",
+          "backend/auth/src/main/java/cn/nobeta/auth/module/account/AccountService.java"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CsrfHeader"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/api/admin/accounts/{id}/status": {
@@ -422,7 +504,7 @@
         ],
         "operationId": "setAccountStatus",
         "summary": "启用或停用账号",
-        "description": "要求 ROLE_AUTH_ADMIN。不能停用正在执行操作的管理员自己（409）。停用删除该账号全部授权记录和 Redis 会话；重新启用不恢复已删除记录。重复设置仍执行数据库更新；重复停用仍执行撤销。\n\n### 业务失败情形\n\n| 状态 | 触发条件 | 源码 reason |\n| --- | --- | --- |\n| 404 | 账号不存在 | `Account not found` |\n| 409 | 管理员停用当前自己的账号 | `An administrator cannot disable the active account` |\n\n业务 reason 用于解释源码行为，不保证作为 response.message/detail 输出。\n\n### cURL 调用示例\n\n```bash\ncurl --include \\\n  --request PUT \\\n  --cookie auth.cookies --cookie-jar auth.cookies \\\n  --header \"X-CSRF-TOKEN: $CSRF_TOKEN\" \\\n  --header \"Content-Type: application/json\" \\\n  --data '{\"enabled\":false}' \\\n  \"$AUTH_BASE/api/admin/accounts/$ACCOUNT_ID/status\"\n```\n\n变量说明见文档开头。",
+        "description": "启用或停用账号。禁止停用自己，并保护最后一个有效管理员；停用后撤销该账号的 Auth 会话和授权记录。不自动撤销 BBS 等 RP 的本地业务令牌。",
         "security": [
           {
             "AuthSession": []
@@ -1140,7 +1222,7 @@
         ],
         "operationId": "getLoginPage",
         "summary": "读取前端登录页面",
-        "description": "由 frontend/auth 提供的浏览器 HTML 登录页，需通过前端或 Nginx 访问；后端不再生成默认登录页。表单提交到 POST /api/login，不接受 JSON 登录。GET ?error 展示登录失败，GET ?logout 展示退出完成。/auth 是上下文路径，实际地址 /auth/login。\n\n### cURL 调用示例\n\n```bash\ncurl --include \\\n  --cookie auth.cookies --cookie-jar auth.cookies \\\n  --header \"Accept: text/html\" \\\n  \"$AUTH_BASE/login\"\n```\n\n变量说明见文档开头。",
+        "description": "由 frontend/auth 提供的浏览器 HTML 登录页，需通过前端或 Nginx 访问；后端不再生成默认登录页。表单提交到 POST /api/login，不接受 JSON 登录。GET ?error 展示登录失败，GET ?logout 展示退出完成。/auth 是上下文路径，实际地址 /auth/login。\n\n### cURL 调用示例\n\n```bash\ncurl --include \\\n  --cookie auth.cookies --cookie-jar auth.cookies \\\n  --header \"Accept: text/html\" \\\n  \"$AUTH_BASE/api/login\"\n```\n\n变量说明见文档开头。",
         "security": [],
         "responses": {
           "200": {
@@ -1171,7 +1253,7 @@
           {
             "lang": "Shell",
             "label": "cURL",
-            "source": "curl --include \\\n  --cookie auth.cookies --cookie-jar auth.cookies \\\n  --header \"Accept: text/html\" \\\n  \"$AUTH_BASE/login\""
+            "source": "curl --include \\\n  --cookie auth.cookies --cookie-jar auth.cookies \\\n  --header \"Accept: text/html\" \\\n  \"$AUTH_BASE/api/login\""
           }
         ],
         "x-implementation-source": [
@@ -1188,7 +1270,7 @@
         ],
         "operationId": "getLogoutConfirmation",
         "summary": "读取普通退出确认页",
-        "description": "由 frontend/auth 提供的退出确认页，需通过前端或 Nginx 访问，不等同立即注销。真正注销使用 POST /api/logout，并携带 CSRF 参数。\n\n### cURL 调用示例\n\n```bash\ncurl --include \\\n  --cookie auth.cookies --cookie-jar auth.cookies \\\n  --header \"Accept: text/html\" \\\n  \"$AUTH_BASE/logout\"\n```\n\n变量说明见文档开头。",
+        "description": "由 frontend/auth 提供的退出确认页，需通过前端或 Nginx 访问，不等同立即注销。真正注销使用 POST /api/logout，并携带 CSRF 参数。\n\n### cURL 调用示例\n\n```bash\ncurl --include \\\n  --cookie auth.cookies --cookie-jar auth.cookies \\\n  --header \"Accept: text/html\" \\\n  \"$AUTH_BASE/api/logout\"\n```\n\n变量说明见文档开头。",
         "security": [
           {},
           {
@@ -1204,7 +1286,7 @@
           {
             "lang": "Shell",
             "label": "cURL",
-            "source": "curl --include \\\n  --cookie auth.cookies --cookie-jar auth.cookies \\\n  --header \"Accept: text/html\" \\\n  \"$AUTH_BASE/logout\""
+            "source": "curl --include \\\n  --cookie auth.cookies --cookie-jar auth.cookies \\\n  --header \"Accept: text/html\" \\\n  \"$AUTH_BASE/api/logout\""
           }
         ],
         "x-implementation-source": [
@@ -2066,7 +2148,7 @@
         ],
         "operationId": "loginWithPassword",
         "summary": "表单登录认证中心",
-        "description": "保留获取 CSRF 时的 Cookie，提交 username/password，并在 _csrf 或 X-CSRF-TOKEN 中传令牌。成功建立 Redis Session，优先重定向到已保存的浏览器请求；没有保存的请求时进入前端 /auth/account。失败默认重定向 /auth/login?error，不返回 JSON 401。账号停用也按认证失败处理。成功后重新获取 CSRF。\n\n### PowerShell 联调流程\n\n同一会话获取 CSRF、注册、登录、查询账号\n\n```powershell\n$authBase = 'http://localhost:9000/auth'\n$authSession = New-Object Microsoft.PowerShell.Commands.WebRequestSession\n$csrf = Invoke-RestMethod -Uri \"$authBase/api/csrf\" -WebSession $authSession\n$csrfHeaders = @{ Accept = 'application/json' }\n$csrfHeaders[$csrf.headerName] = $csrf.token\n\n$registration = @{ username = 'alice'; password = 'example-passphrase-2026' } | ConvertTo-Json\nInvoke-RestMethod -Method Post -Uri \"$authBase/api/accounts/register\" `\n    -WebSession $authSession -Headers $csrfHeaders `\n    -ContentType 'application/json' -Body $registration\n\n$loginFields = @{ username = 'alice'; password = 'example-passphrase-2026' }\n$loginFields[$csrf.parameterName] = $csrf.token\n# 保留 Cookie，同时查看原始 302；不要把登录失败的重定向误判为成功。\n# PowerShell 某些版本在限制重定向时会抛异常，用异常中的 Response 检查 Location。\nInvoke-WebRequest -Method Post -Uri \"$authBase/api/login\" `\n    -WebSession $authSession -ContentType 'application/x-www-form-urlencoded' `\n    -Body $loginFields -MaximumRedirection 0\n\n# 若已完成成功登录，重新获取 CSRF；当前账号查询才是身份建立的确认。\n$csrf = Invoke-RestMethod -Uri \"$authBase/api/csrf\" -WebSession $authSession\n$csrfHeaders[$csrf.headerName] = $csrf.token\nInvoke-RestMethod -Uri \"$authBase/api/accounts/me\" -WebSession $authSession\n```\n\n本地 HTTP 示例必须设置本节后述的开发配置。注册只在首次执行时成功；重复用户名返回 `409`。创建客户端需要用真正的 Auth 管理员登录，注册的普通 `alice` 没有该权限。\n\n### cURL 调用示例\n\n```bash\ncurl --include \\\n  --request POST \\\n  --cookie auth.cookies --cookie-jar auth.cookies \\\n  --data-urlencode \"username=$LOGIN_USERNAME\" \\\n  --data-urlencode \"password=$LOGIN_PASSWORD\" \\\n  --data-urlencode \"_csrf=$CSRF_TOKEN\" \\\n  \"$AUTH_BASE/api/login\"\n```\n\n变量说明见文档开头。浏览器跳转示例只展示请求与 Location；不自动跟随跳转，也不替代浏览器 SSO 流程。",
+        "description": "浏览器原生表单提交 username、password 和 CSRF 凭证，使用 AUTH_SESSION Cookie。成功后恢复已保存的 GET /oauth2/authorize；没有授权请求则跳到 /auth/account。失败跳到 /auth/login?error。不能使用 AJAX 跟随完整 SSO 跳转，否则可能在后台消费授权码。请求缓存只保存授权请求，不保存普通 API。密码错误通常返回 302，CSRF 失败返回 403。",
         "security": [],
         "responses": {
           "302": {
@@ -2124,7 +2206,7 @@
         ],
         "operationId": "logoutSession",
         "summary": "退出当前认证中心会话",
-        "description": "表单 _csrf 或 X-CSRF-TOKEN 至少提供一种，并保留对应 Cookie。成功清除当前会话与 SecurityContext，跳转 /auth/login?logout。普通会话退出不调用 AccountService.revoke，不删除全部 OAuth 授权记录，不退出其他应用的本地会话。\n\n### cURL 调用示例\n\n```bash\ncurl --include \\\n  --request POST \\\n  --cookie auth.cookies --cookie-jar auth.cookies \\\n  --data-urlencode \"_csrf=$CSRF_TOKEN\" \\\n  \"$AUTH_BASE/api/logout\"\n```\n\n变量说明见文档开头。浏览器跳转示例只展示请求与 Location；不自动跟随跳转，也不替代浏览器 SSO 流程。",
+        "description": "提交同一会话的 CSRF 凭证，注销当前 Auth Cookie 会话后跳到 /auth/login?logout。不会注销 BBS 的业务令牌。标准 RP 发起的退出使用 /connect/logout。",
         "security": [
           {},
           {
@@ -2184,6 +2266,255 @@
           "backend/auth/src/main/java/cn/nobeta/auth/config/SecurityConfig.java",
           "backend/auth/src/main/java/cn/nobeta/auth/config/ProtocolConfig.java"
         ]
+      }
+    },
+    "/api/admin/accounts/{id}": {
+      "get": {
+        "tags": [
+          "Administration"
+        ],
+        "operationId": "getManagedAccount",
+        "summary": "查询账号详情",
+        "description": "要求管理员会话，返回账号状态和 Auth 角色。",
+        "security": [
+          {
+            "AuthSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountView"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BusinessBadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/UnexpectedError"
+          }
+        },
+        "x-required-authorities": [
+          "ROLE_AUTH_ADMIN"
+        ],
+        "x-implementation-source": [
+          "backend/auth/src/main/java/cn/nobeta/auth/module/account/AccountController.java",
+          "backend/auth/src/main/java/cn/nobeta/auth/module/account/AccountService.java"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AccountId"
+          }
+        ]
+      }
+    },
+    "/api/admin/roles": {
+      "get": {
+        "tags": [
+          "Administration"
+        ],
+        "operationId": "listAuthRoles",
+        "summary": "查询可管理的 Auth 角色",
+        "description": "当前只返回 ROLE_AUTH_ADMIN。普通用户无需专门角色即可登录；历史或手动添加的 ROLE_AUTH_USER 不在此可管理角色集合中。",
+        "security": [
+          {
+            "AuthSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "ROLE_AUTH_ADMIN"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BusinessBadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/UnexpectedError"
+          }
+        },
+        "x-required-authorities": [
+          "ROLE_AUTH_ADMIN"
+        ],
+        "x-implementation-source": [
+          "backend/auth/src/main/java/cn/nobeta/auth/module/account/AccountController.java",
+          "backend/auth/src/main/java/cn/nobeta/auth/module/account/AccountService.java"
+        ],
+        "parameters": []
+      }
+    },
+    "/api/admin/accounts/{id}/roles": {
+      "put": {
+        "tags": [
+          "Administration"
+        ],
+        "operationId": "replaceAccountRoles",
+        "summary": "替换账号权限",
+        "description": "roles=[] 表示移除全部角色，roles=[\"ROLE_AUTH_ADMIN\"] 表示授予管理员权限。禁止移除自己的管理员角色，且必须保留至少一个有效管理员。变更会撤销目标账号的 Auth 会话和授权记录；相同角色集合不触发撤销。不会主动撤销 RP 本地会话或离线 JWT。",
+        "security": [
+          {
+            "AuthSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountView"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BusinessBadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/UnexpectedError"
+          }
+        },
+        "x-required-authorities": [
+          "ROLE_AUTH_ADMIN"
+        ],
+        "x-implementation-source": [
+          "backend/auth/src/main/java/cn/nobeta/auth/module/account/AccountController.java",
+          "backend/auth/src/main/java/cn/nobeta/auth/module/account/AccountService.java"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AccountId"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfHeader"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RolesRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/accounts/{id}/password": {
+      "put": {
+        "tags": [
+          "Administration"
+        ],
+        "operationId": "resetManagedAccountPassword",
+        "summary": "管理员重置账号密码",
+        "description": "密码限制与注册一致。禁止通过此接口重置自己的密码，本人使用 /api/accounts/me/password。成功后撤销目标账号的 Auth 会话和授权记录。",
+        "security": [
+          {
+            "AuthSession": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "操作成功"
+          },
+          "400": {
+            "$ref": "#/components/responses/BusinessBadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/UnexpectedError"
+          }
+        },
+        "x-required-authorities": [
+          "ROLE_AUTH_ADMIN"
+        ],
+        "x-implementation-source": [
+          "backend/auth/src/main/java/cn/nobeta/auth/module/account/AccountController.java",
+          "backend/auth/src/main/java/cn/nobeta/auth/module/account/AccountService.java"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AccountId"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfHeader"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordRequest"
+              }
+            }
+          }
+        }
       }
     }
   },
@@ -2635,7 +2966,8 @@
           "username",
           "enabled",
           "createTime",
-          "updateTime"
+          "updateTime",
+          "roles"
         ],
         "properties": {
           "id": {
@@ -2676,6 +3008,16 @@
             "example": "2026-10-03T02:00:00",
             "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?$",
             "readOnly": true
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Auth 角色列表。ROLE_AUTH_ADMIN 才能访问管理接口；BBS 的业务权限由 BBS 独立维护。",
+            "example": [
+              "ROLE_AUTH_ADMIN"
+            ]
           }
         },
         "example": {
@@ -2822,6 +3164,11 @@
             "format": "date-time",
             "nullable": true,
             "example": null
+          },
+          "requireProofKey": {
+            "type": "boolean",
+            "default": false,
+            "description": "是否要求客户端使用 PKCE。机密客户端可选；框架校验挑战及验证值，不额外强制 S256。"
           }
         },
         "example": {
@@ -3034,9 +3381,7 @@
           },
           "requireProofKey": {
             "type": "boolean",
-            "description": "当前创建/更新固定为框架默认 false；PKCE 可选，接入应用建议始终使用 S256。",
-            "example": false,
-            "readOnly": true
+            "description": "该客户端是否要求 PKCE，来自注册配置，不是固定值。"
           },
           "enabled": {
             "type": "boolean",
@@ -4077,6 +4422,42 @@
           "exp": 1790993700,
           "nonce": "nonce-for-this-request"
         }
+      },
+      "RolesRequest": {
+        "type": "object",
+        "properties": {
+          "roles": {
+            "type": "array",
+            "uniqueItems": true,
+            "maxItems": 1,
+            "items": {
+              "type": "string",
+              "enum": [
+                "ROLE_AUTH_ADMIN"
+              ]
+            },
+            "description": "替换全部 Auth 角色。空数组表示普通账号；只支持 ROLE_AUTH_ADMIN。"
+          }
+        },
+        "required": [
+          "roles"
+        ]
+      },
+      "ResetPasswordRequest": {
+        "type": "object",
+        "properties": {
+          "password": {
+            "type": "string",
+            "description": "至少 12 个字符，最多 72 个 UTF-8 字节。",
+            "format": "password",
+            "writeOnly": true,
+            "minLength": 12,
+            "maxLength": 72
+          }
+        },
+        "required": [
+          "password"
+        ]
       }
     },
     "examples": {
@@ -4111,7 +4492,8 @@
           "username": "alice",
           "enabled": true,
           "createTime": "2026-10-03T02:00:00",
-          "updateTime": "2026-10-03T02:00:00"
+          "updateTime": "2026-10-03T02:00:00",
+          "roles": []
         }
       },
       "AccountDisabled": {
@@ -4122,7 +4504,8 @@
           "username": "alice",
           "enabled": false,
           "createTime": "2026-10-03T02:00:00",
-          "updateTime": "2026-10-03T02:10:00"
+          "updateTime": "2026-10-03T02:10:00",
+          "roles": []
         }
       },
       "Enable": {
@@ -4147,7 +4530,8 @@
               "username": "alice",
               "enabled": true,
               "createTime": "2026-10-03T02:00:00",
-              "updateTime": "2026-10-03T02:00:00"
+              "updateTime": "2026-10-03T02:00:00",
+              "roles": []
             }
           ],
           "total": 1,
@@ -4186,7 +4570,8 @@
           "authorizationCodeTimeToLive": 300,
           "accessTokenTimeToLive": 900,
           "refreshTokenTimeToLive": 2592000,
-          "clientSecretExpiresAt": null
+          "clientSecretExpiresAt": null,
+          "requireProofKey": false
         }
       },
       "CreateCodeOnlyClient": {
@@ -4208,7 +4593,8 @@
           "authorizationCodeTimeToLive": 300,
           "accessTokenTimeToLive": 900,
           "refreshTokenTimeToLive": 2592000,
-          "clientSecretExpiresAt": null
+          "clientSecretExpiresAt": null,
+          "requireProofKey": false
         },
         "description": "没有 refresh_token 授权类型也必须提供 refreshTokenTimeToLive；scopes 仍为 openid。"
       },

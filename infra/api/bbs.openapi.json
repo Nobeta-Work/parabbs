@@ -1,0 +1,776 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Para BBS 登录与 SSO API",
+    "version": "0.5.2",
+    "description": "仅描述当前 BBS 登录、SSO、业务令牌刷新和退出，不包含文章等业务接口。servers 已包含 /bbs，paths 不再重复此前缀。\n\n## 浏览器调用顺序\n1. 导航到 /api/auth/sso/authorize/auth?returnTo=%2F。\n2. 浏览器在 Auth 登录（复用 AUTH_SESSION）；Auth 将授权码返回 BBS 的 /api/auth/sso/callback/auth。\n3. BBS 后端兑换并验证 OIDC 身份，跳到前端 /bbs/login/callback。此页面路由不是 API，不列入 paths。\n4. 前端 GET /api/auth/sso/csrf，随后 POST /api/auth/sso/session，领取 BBS 自己的双令牌，再跳回 returnTo。\n5. 后续业务使用 BBS accessToken，刷新使用 BBS refreshToken。\n\nBBS_SSO_SESSION 与 AUTH_SESSION 属于不同上下文，CSRF 也不能混用。开始登录及回调属于浏览器导航，避免 fetch 自动跟随重定向并隐式消费授权码。Cookie 默认 Secure，生产使用 HTTPS；本地 HTTP 必须按项目配置显式关闭安全 Cookie。\n\n## 响应\nBBS 使用 {code,msg,data}，code=200 才是成功，不能只判断 HTTP 状态。控制器业务异常通常仍返回 HTTP 200；安全链失败返回 HTTP 401/403。expireIn 是访问令牌到期时间，不是持续秒数。Auth API 的直接 JSON/ProblemDetail/OAuth 错误与此不同。\n\n旧本地密码登录、注册及管理员密码登录接口已移除，不应继续调用。Auth 身份和 BBS 权限分离：Auth 管理员不会自动获得 BBS 管理权限。Auth 授权撤销或退出不会自动撤销 BBS 本地会话，当前未接入统一退出通知。\n\n本规范按源码整理，未调用生产服务进行联调。"
+  },
+  "servers": [
+    {
+      "url": "https://nobeta.cn/bbs",
+      "description": "生产反向代理入口"
+    },
+    {
+      "url": "http://localhost:8080/bbs",
+      "description": "本机 HTTP，仅适用于已调整 Cookie/issuer 的开发环境"
+    }
+  ],
+  "tags": [
+    {
+      "name": "BBS 登录与 SSO"
+    }
+  ],
+  "paths": {
+    "/api/auth/identity-provider": {
+      "get": {
+        "tags": [
+          "BBS 登录与 SSO"
+        ],
+        "operationId": "getBbsIdentityProvider",
+        "summary": "查询认证入口",
+        "description": "公开接口。获取登录入口及 Auth 注册、修改密码的前端页面地址。BBS 不再提供本地密码登录或注册接口。",
+        "security": [],
+        "responses": {
+          "401": {
+            "description": "安全链未认证，HTTP 401。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResult"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "权限不足或 CSRF 失败，HTTP 403。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResult"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "框架或基础设施异常；不是所有错误都有 Result 包装。"
+          },
+          "200": {
+            "description": "入口配置",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityProviderResult"
+                },
+                "example": {
+                  "code": 200,
+                  "msg": "操作成功",
+                  "data": {
+                    "loginUrl": "/bbs/api/auth/sso/authorize/auth",
+                    "registerUrl": "https://nobeta.cn/auth/register",
+                    "passwordUrl": "https://nobeta.cn/auth/password"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/sso/authorize/auth": {
+      "get": {
+        "tags": [
+          "BBS 登录与 SSO"
+        ],
+        "operationId": "startBbsSso",
+        "summary": "发起 BBS OIDC 登录",
+        "description": "浏览器导航到此 URL。Spring Security 生成 state、nonce 和 PKCE，将原始授权请求保存在 Redis 临时会话中，并重定向到 Auth。无需 BBS Bearer Token。临时会话默认 10 分钟；Cookie 为 BBS_SSO_SESSION，Path=/bbs/api/auth/sso，HttpOnly、Secure、SameSite=Lax。returnTo 仅允许本地路径；超过 1024 字符、双斜杠、反斜杠、控制字符或登录循环目标会回退。admin=true 只是入口意图，最终必须通过 BBS 本地管理员权限检查。",
+        "security": [],
+        "responses": {
+          "401": {
+            "description": "安全链未认证，HTTP 401。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResult"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "权限不足或 CSRF 失败，HTTP 403。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResult"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "框架或基础设施异常；不是所有错误都有 Result 包装。"
+          },
+          "302": {
+            "description": "浏览器重定向；保持会话 Cookie，不要用 AJAX 隐式跟随回调。",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "目标地址，可能携带 OAuth 参数或错误标记。"
+              },
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "必要时设置或更新 BBS_SSO_SESSION；由浏览器管理。"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "returnTo",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 1024
+            },
+            "example": "/",
+            "description": "BBS 前端返回目标；普通登录默认 /，管理员入口默认 /admin。"
+          },
+          {
+            "name": "admin",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "要求 BBS 本地管理员权限，不是 Auth 管理员角色。"
+          }
+        ]
+      }
+    },
+    "/api/auth/sso/callback/auth": {
+      "get": {
+        "tags": [
+          "BBS 登录与 SSO"
+        ],
+        "operationId": "receiveBbsOidcCallback",
+        "summary": "处理 Auth 授权回调",
+        "description": "协议回调由框架处理，不是前端直接兑换业务令牌的 API。浏览器必须保留发起登录时的 BBS_SSO_SESSION。BBS 校验 state，后端使用 Basic 客户端认证、授权码和 PKCE verifier 调用 Auth token 端点，验证 ID Token，再按 (issuer,sub) 映射 BBS 用户；缺少映射则创建普通业务用户。成功把 userId 放入临时会话，交接窗口缩短至 120 秒，并跳转 /bbs/login/callback。业务拒绝跳转 ?error=failed，BBS 管理员权限不足跳转 ?error=forbidden。OAuth 框架认证失败通常跳转 ?error=failed，基础设施异常不保证重定向。回调不把令牌放入 URL。",
+        "security": [
+          {
+            "BbsSsoSession": []
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "安全链未认证，HTTP 401。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResult"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "权限不足或 CSRF 失败，HTTP 403。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResult"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "框架或基础设施异常；不是所有错误都有 Result 包装。"
+          },
+          "302": {
+            "description": "浏览器重定向；保持会话 Cookie，不要用 AJAX 隐式跟随回调。",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "目标地址，可能携带 OAuth 参数或错误标记。"
+              },
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "必要时设置或更新 BBS_SSO_SESSION；由浏览器管理。"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "成功授权时提供的一次性授权码。"
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "与原始授权请求关联的随机状态。"
+          },
+          {
+            "name": "error",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Auth 返回的 OAuth 错误；与成功 code 分支互斥。"
+          },
+          {
+            "name": "error_description",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "可选 OAuth 错误说明。"
+          }
+        ]
+      }
+    },
+    "/api/auth/sso/csrf": {
+      "get": {
+        "tags": [
+          "BBS 登录与 SSO"
+        ],
+        "operationId": "getBbsSsoCsrf",
+        "summary": "获取 BBS 登录交接 CSRF 凭证",
+        "description": "匿名可访问。保留响应 Cookie；凭证绑定 BBS 临时会话。应在 callback 页面领取令牌前调用。响应 Cache-Control: no-store；该凭证不是 Auth 的 CSRF token。",
+        "security": [],
+        "responses": {
+          "401": {
+            "description": "安全链未认证，HTTP 401。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResult"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "权限不足或 CSRF 失败，HTTP 403。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResult"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "框架或基础设施异常；不是所有错误都有 Result 包装。"
+          },
+          "200": {
+            "description": "CSRF 凭证",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CsrfResult"
+                },
+                "example": {
+                  "code": 200,
+                  "msg": "操作成功",
+                  "data": {
+                    "headerName": "X-CSRF-TOKEN",
+                    "parameterName": "_csrf",
+                    "token": "<当前会话的CSRF凭证>"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/sso/session": {
+      "post": {
+        "tags": [
+          "BBS 登录与 SSO"
+        ],
+        "operationId": "finishBbsSso",
+        "summary": "一次性领取 BBS 业务双令牌",
+        "description": "仅在 OIDC 回调成功后调用。发送 BBS_SSO_SESSION 和同会话 CSRF 头，无需请求体及 BBS Bearer Token。后端重新检查 BBS 用户状态/权限并签发双令牌，使用 Redis 保证交接只能执行一次；无论交接成功或处理失败，都会清理已进入交接处理的临时会话。不要重复请求。控制器业务异常通常 HTTP 200 + code=401/403；安全链异常使用真实 HTTP 401/403。当前 BBS 不保存 Auth 的访问及刷新令牌。",
+        "security": [
+          {
+            "BbsSsoSession": [],
+            "BbsCsrf": []
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "安全链未认证，HTTP 401。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResult"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "权限不足或 CSRF 失败，HTTP 403。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResult"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "框架或基础设施异常；不是所有错误都有 Result 包装。"
+          },
+          "200": {
+            "description": "业务令牌或业务错误；务必判断 code。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/LoginSessionResult"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorResult"
+                    }
+                  ]
+                },
+                "example": {
+                  "code": 200,
+                  "msg": "操作成功",
+                  "data": {
+                    "tokens": {
+                      "accessToken": "<BBS访问令牌>",
+                      "refreshToken": "<BBS刷新令牌>",
+                      "expireIn": "2026-10-07T04:15:00.000+00:00"
+                    },
+                    "returnTo": "/"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-CSRF-TOKEN",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "使用 /api/auth/sso/csrf 返回的 token；headerName 以响应为准。必须来自同一个 BBS_SSO_SESSION 会话。"
+          }
+        ],
+        "x-csrf-protection": "required"
+      }
+    },
+    "/api/auth/refresh": {
+      "post": {
+        "tags": [
+          "BBS 登录与 SSO"
+        ],
+        "operationId": "refreshBbsTokens",
+        "summary": "刷新 BBS 双令牌",
+        "description": "提交 BBS refreshToken，不是 Auth refresh_token。采用一次性轮换：成功返回新的访问令牌和刷新令牌，旧刷新令牌失效。后端重新加载 BBS 用户状态和权限，但不会重新认证 Auth。不要并发重复刷新。限流配置为容量 5、补充量 1（具体时间窗口由项目限流组件定义）。业务失效通常 HTTP 200 + code=401；其他业务失败同样检查 code。该业务链不要求 Cookie/CSRF。 限流业务错误也可能返回 HTTP 200 + code=429。",
+        "security": [],
+        "responses": {
+          "401": {
+            "description": "安全链未认证，HTTP 401。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResult"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "权限不足或 CSRF 失败，HTTP 403。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResult"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "框架或基础设施异常；不是所有错误都有 Result 包装。"
+          },
+          "200": {
+            "description": "新令牌或业务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/TokenResult"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorResult"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshForm"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "tags": [
+          "BBS 登录与 SSO"
+        ],
+        "operationId": "logoutBbs",
+        "summary": "退出 BBS 业务登录",
+        "description": "发送 Authorization: Bearer <BBS accessToken>。要求 BBS USER 或 ADMIN 角色。撤销当前访问令牌、删除该用户的全部 BBS 登录缓存和刷新令牌，因此影响该用户在 BBS 的其他设备。不会注销 Auth 或其他 RP。无需 Cookie、CSRF 或请求体。",
+        "security": [
+          {
+            "BbsBearer": []
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "安全链未认证，HTTP 401。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResult"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "权限不足或 CSRF 失败，HTTP 403。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResult"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "框架或基础设施异常；不是所有错误都有 Result 包装。"
+          },
+          "200": {
+            "description": "退出成功或业务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/EmptyResult"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorResult"
+                    }
+                  ]
+                },
+                "example": {
+                  "code": 200,
+                  "msg": "操作成功",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BbsBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "BBS 自签发的访问令牌；Auth Access Token、ID Token 和 BBS Refresh Token 不能替代。"
+      },
+      "BbsSsoSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "BBS_SSO_SESSION",
+        "description": "浏览器保留，服务端在 Redis 保存临时登录请求/认证交接状态。"
+      },
+      "BbsCsrf": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-CSRF-TOKEN",
+        "description": "以 /api/auth/sso/csrf 响应 headerName 为准。"
+      }
+    },
+    "schemas": {
+      "CsrfView": {
+        "type": "object",
+        "properties": {
+          "headerName": {
+            "type": "string",
+            "example": "X-CSRF-TOKEN"
+          },
+          "parameterName": {
+            "type": "string",
+            "example": "_csrf"
+          },
+          "token": {
+            "type": "string",
+            "description": "从当前会话读取，不要硬编码。"
+          }
+        },
+        "required": [
+          "headerName",
+          "parameterName",
+          "token"
+        ]
+      },
+      "IdentityProvider": {
+        "type": "object",
+        "properties": {
+          "loginUrl": {
+            "type": "string",
+            "description": "BBS 本地登录发起入口。",
+            "example": "/bbs/api/auth/sso/authorize/auth"
+          },
+          "registerUrl": {
+            "type": "string",
+            "format": "uri",
+            "example": "https://nobeta.cn/auth/register"
+          },
+          "passwordUrl": {
+            "type": "string",
+            "format": "uri",
+            "example": "https://nobeta.cn/auth/password"
+          }
+        },
+        "required": [
+          "loginUrl",
+          "registerUrl",
+          "passwordUrl"
+        ]
+      },
+      "TokenVO": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "BBS 业务访问令牌，不是 Auth Access Token。"
+          },
+          "refreshToken": {
+            "type": "string",
+            "description": "BBS 业务刷新令牌，使用一次后轮换。"
+          },
+          "expireIn": {
+            "type": "string",
+            "description": "访问令牌的绝对到期时间。Java Date 默认按 ISO-8601 序列化；不是剩余秒数，生产 Jackson 配置可能覆盖格式。",
+            "format": "date-time",
+            "example": "2026-10-07T04:15:00.000+00:00"
+          }
+        },
+        "required": [
+          "accessToken",
+          "refreshToken",
+          "expireIn"
+        ]
+      },
+      "LoginResult": {
+        "type": "object",
+        "properties": {
+          "tokens": {
+            "$ref": "#/components/schemas/TokenVO"
+          },
+          "returnTo": {
+            "type": "string",
+            "description": "BBS 前端路由目标，不是 OIDC redirect_uri。",
+            "example": "/"
+          }
+        },
+        "required": [
+          "tokens",
+          "returnTo"
+        ]
+      },
+      "IdentityProviderResult": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "业务码；200 才代表成功。",
+            "enum": [
+              200
+            ]
+          },
+          "msg": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/IdentityProvider"
+          }
+        },
+        "required": [
+          "code",
+          "msg"
+        ]
+      },
+      "CsrfResult": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "业务码；200 才代表成功。",
+            "enum": [
+              200
+            ]
+          },
+          "msg": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CsrfView"
+          }
+        },
+        "required": [
+          "code",
+          "msg"
+        ]
+      },
+      "LoginSessionResult": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "业务码；200 才代表成功。",
+            "enum": [
+              200
+            ]
+          },
+          "msg": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/LoginResult"
+          }
+        },
+        "required": [
+          "code",
+          "msg"
+        ]
+      },
+      "TokenResult": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "业务码；200 才代表成功。",
+            "enum": [
+              200
+            ]
+          },
+          "msg": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/TokenVO"
+          }
+        },
+        "required": [
+          "code",
+          "msg"
+        ]
+      },
+      "EmptyResult": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "业务码；200 才代表成功。",
+            "enum": [
+              200
+            ]
+          },
+          "msg": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "nullable": true
+          }
+        },
+        "required": [
+          "code",
+          "msg"
+        ]
+      },
+      "ErrorResult": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "example": 401,
+            "enum": [
+              400,
+              401,
+              403,
+              404,
+              429,
+              500
+            ]
+          },
+          "msg": {
+            "type": "string",
+            "example": "未登陆，请先授权"
+          },
+          "data": {
+            "type": "object",
+            "nullable": true
+          }
+        },
+        "required": [
+          "code",
+          "msg"
+        ]
+      },
+      "RefreshForm": {
+        "type": "object",
+        "properties": {
+          "refreshToken": {
+            "type": "string",
+            "description": "BBS refreshToken。不要把 Auth refresh_token 填在这里。",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "refreshToken"
+        ]
+      }
+    }
+  }
+}
